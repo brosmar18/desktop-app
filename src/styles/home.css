@@ -1,0 +1,209 @@
+/* Dashboard Layout */
+.dashboard-container {
+    display: flex;
+    min-height: 100vh;
+    background-color: var(--background);
+  }
+  
+  /* Sidebar Styles */
+  .sidebar {
+    display: none;
+    width: 240px;
+    background-color: rgba(255, 255, 255, 0.05);
+    padding: 1.5rem;
+    flex-direction: column;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+  
+  .sidebar-title {
+    font-size: 1.5rem;
+    font-weight: bold;
+    margin-bottom: 1.5rem;
+    color: var(--primary);
+  }
+  
+  .sidebar-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .sidebar-link {
+    color: rgba(255, 255, 255, 0.8);
+    text-decoration: none;
+    padding: 0.5rem 0;
+    transition: color 0.3s ease;
+  }
+  
+  .sidebar-link:hover,
+  .sidebar-link.active {
+    color: var(--primary);
+  }
+  
+  /* Main Content Styles */
+  .main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  /* Header Styles */
+  .header {
+    background-color: rgba(255, 255, 255, 0.02);
+    padding: 1rem 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+  
+  .header-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text);
+  }
+  
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+  }
+  
+  /* Theme Toggle Button */
+  .theme-toggle-container {
+    position: relative;
+    width: 40px;
+    height: 40px;
+  }
+  
+  .theme-toggle-btn {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: none;
+    background-color: rgba(255, 255, 255, 0.1);
+    font-size: 20px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+  }
+  
+  /* Logout Button */
+  .logout-container {
+    position: relative;
+  }
+  
+  .logout-button {
+    position: relative;
+    padding: 0.5rem 1rem;
+    border-radius: 0.375rem;
+    border: none;
+    background-color: var(--accent);
+    color: white;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    z-index: 5;
+  }
+  
+  .logout-button:hover {
+    opacity: 0.9;
+  }
+  
+  /* Content Area */
+  .content {
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    overflow-y: auto;
+  }
+  
+  /* Card Styles */
+  .card {
+    background-color: rgba(255, 255, 255, 0.03);
+    border-radius: 0.5rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    padding: 1.5rem;
+  }
+  
+  .card-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    color: var(--primary);
+  }
+  
+  /* Connection Card Styles */
+  .connection-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 1rem;
+  }
+  
+  .connection-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  
+  .connection-label {
+    font-size: 0.875rem;
+    color: rgba(255, 255, 255, 0.6);
+  }
+  
+  .connection-value {
+    font-size: 1rem;
+    font-weight: 500;
+  }
+  
+  .status-connected {
+    color: var(--accent);
+  }
+  
+  /* Database Card Styles */
+  .database-content {
+    padding: 1rem 0;
+  }
+  
+  /* Light Mode Overrides */
+  .light-mode .sidebar {
+    background-color: white;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  }
+  
+  .light-mode .sidebar-link {
+    color: rgba(0, 0, 0, 0.7);
+  }
+  
+  .light-mode .header {
+    background-color: white;
+  }
+  
+  .light-mode .card {
+    background-color: white;
+  }
+  
+  .light-mode .connection-label {
+    color: rgba(0, 0, 0, 0.6);
+  }
+  
+  /* Responsive Styles */
+  @media (min-width: 768px) {
+    .sidebar {
+      display: flex;
+    }
+  }
+  
+  @media (max-width: 767px) {
+    .connection-grid {
+      grid-template-columns: 1fr;
+    }
+  }

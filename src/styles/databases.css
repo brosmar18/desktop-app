@@ -1,0 +1,300 @@
+/* Database Explorer Styles */
+.explorer-container {
+  display: flex;
+  height: calc(100vh - 70px); /* Height minus header */
+  background-color: rgba(255, 255, 255, 0.02);
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+/* Sidebar for database list */
+.explorer-sidebar {
+  width: 280px; /* Increased from 250px */
+  min-width: 280px; /* Increased from 250px */
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  max-height: 100%;
+}
+
+.explorer-search {
+  padding: 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.search-input {
+  width: 100%;
+  padding: 0.5rem;
+  background-color: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  color: var(--text);
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.explorer-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+  width: 100%;
+}
+
+.explorer-title {
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  color: var(--primary);
+  margin-bottom: 0.5rem;
+}
+
+.item-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  width: 100%;
+}
+
+.list-item {
+  padding: 0.5rem;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  width: 100%;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: break-all; /* Allow breaking at any character */
+  hyphens: auto; /* Enable hyphenation */
+  line-height: 1.4;
+}
+
+.list-item:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.list-item.active {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: var(--primary);
+}
+
+.list-item.loading, .list-item.error, .list-item.empty {
+  font-style: italic;
+  opacity: 0.7;
+  cursor: default;
+}
+
+/* Main content area */
+.explorer-content {
+  flex: 1;
+  padding: 1rem;
+  overflow-y: auto;
+}
+
+.empty-state {
+  display: flex;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.content-title {
+  margin-bottom: 1rem;
+  color: var(--primary);
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+/* Tables list styling */
+.tables-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.table-item {
+  padding: 1rem;
+  background-color: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.table-item:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  transform: translateY(-2px);
+}
+
+.table-icon {
+  display: flex;
+  align-items: center;
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+/* Columns table styling */
+.breadcrumb {
+  margin-bottom: 1rem;
+  color: rgba(255, 255, 255, 0.6);
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.columns-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.columns-table th {
+  text-align: left;
+  padding: 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--primary);
+}
+
+.columns-table td {
+  padding: 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.columns-table tr:hover td {
+  background-color: rgba(255, 255, 255, 0.02);
+}
+
+.back-button-container {
+  margin-top: 1.5rem;
+}
+
+.back-button {
+  background-color: rgba(255, 255, 255, 0.1);
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.back-button:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+}
+
+/* Light mode overrides */
+.light-mode .explorer-container {
+  background-color: white;
+}
+
+.light-mode .explorer-sidebar {
+  border-right-color: rgba(0, 0, 0, 0.1);
+}
+
+.light-mode .explorer-search {
+  border-bottom-color: rgba(0, 0, 0, 0.1);
+}
+
+.light-mode .search-input {
+  background-color: rgba(0, 0, 0, 0.02);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+.light-mode .list-item:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.light-mode .list-item.active {
+  background-color: rgba(0, 0, 0, 0.08);
+}
+
+.light-mode .table-item {
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
+.light-mode .table-item:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.light-mode .columns-table th {
+  border-bottom-color: rgba(0, 0, 0, 0.1);
+}
+
+.light-mode .columns-table td {
+  border-bottom-color: rgba(0, 0, 0, 0.05);
+}
+
+.light-mode .columns-table tr:hover td {
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
+.light-mode .back-button {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.light-mode .back-button:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+/* Additional styles for loading and error states */
+.list-item.loading, 
+.list-item.error, 
+.list-item.empty,
+li.loading,
+li.error,
+li.empty,
+.loading,
+.error,
+.empty {
+  padding: 0.75rem;
+  font-style: italic;
+  opacity: 0.7;
+  cursor: default;
+  width: 100%;
+  display: block;
+  text-align: center;
+}
+
+.list-item.error,
+li.error,
+.error,
+td.error {
+  color: #f76c6c;
+}
+
+/* Make sure database titles don't get cut off */
+#selected-db-name {
+  word-break: break-word;
+  max-width: 100%;
+  display: inline-block;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .explorer-container {
+    flex-direction: column;
+    height: auto;
+  }
+  
+  .explorer-sidebar {
+    width: 100%;
+    min-width: auto;
+    border-right: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  
+  .light-mode .explorer-sidebar {
+    border-bottom-color: rgba(0, 0, 0, 0.1);
+  }
+  
+  .tables-list {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  }
+}
+

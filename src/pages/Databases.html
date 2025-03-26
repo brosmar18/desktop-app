@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline';">
+    <title>PostgreSQL Explorer - Databases</title>
+    <link rel="stylesheet" href="../styles/main.css">
+    <link rel="stylesheet" href="../styles/home.css">
+    <link rel="stylesheet" href="../styles/databases.css">
+</head>
+
+<body class="dark-mode">
+    <div class="dashboard-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <h2 class="sidebar-title">PostgreSQL Explorer</h2>
+            <nav class="sidebar-nav">
+                <a href="../pages/Home.html" class="sidebar-link">Dashboard</a>
+                <a href="../pages/Databases.html" class="sidebar-link active">Databases</a>
+                <a href="#" class="sidebar-link">Tables</a>
+                <a href="#" class="sidebar-link">Queries</a>
+                <a href="#" class="sidebar-link">Settings</a>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Header -->
+            <header class="header">
+                <h1 class="header-title">Databases</h1>
+                <div class="header-actions">
+                    <div class="theme-toggle-container">
+                        <button id="theme-toggle-btn" class="theme-toggle-btn">☀️</button>
+                    </div>
+                    <div class="logout-container">
+                        <button id="logout-btn" class="logout-button">Logout</button>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Content -->
+            <main class="content">
+                <!-- Database Explorer Layout -->
+                <div class="explorer-container">
+                    <!-- Database List Panel -->
+                    <div class="explorer-sidebar">
+                        <div class="explorer-search">
+                            <input type="text" id="database-search" placeholder="Search databases..."
+                                class="search-input">
+                        </div>
+                        <div class="explorer-list">
+                            <h3 class="explorer-title">Databases</h3>
+                            <ul id="database-list" class="item-list">
+                                <li class="list-item loading">Loading databases...</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Tables and Columns Panel -->
+                    <div class="explorer-content">
+                        <!-- No Database Selected State -->
+                        <div id="no-selection" class="empty-state">
+                            <p>Select a database to view its tables</p>
+                        </div>
+
+                        <!-- Selected Database Tables -->
+                        <div id="tables-view" class="tables-container" style="display: none;">
+                            <h3 class="content-title">Tables in <span id="selected-db-name">database</span></h3>
+                            <ul id="tables-list" class="tables-list">
+                                <!-- Tables will be populated here -->
+                            </ul>
+                        </div>
+
+                        <!-- Selected Table Columns -->
+                        <div id="columns-view" class="columns-container" style="display: none;">
+                            <div class="breadcrumb">
+                                <span id="db-breadcrumb">database</span> > <span id="table-breadcrumb">table</span>
+                            </div>
+                            <h3 class="content-title">Columns in <span id="selected-table-name">table</span></h3>
+                            <table class="columns-table">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Type</th>
+                                        <th>Nullable</th>
+                                        <th>Default</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="columns-list">
+                                    <!-- Columns will be populated here -->
+                                </tbody>
+                            </table>
+                            <div class="back-button-container">
+                                <button id="back-to-tables" class="back-button">Back to Tables</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Reference to external JavaScript file -->
+    <script src="../js/databases.js"></script>
+</body>
+
+</html>

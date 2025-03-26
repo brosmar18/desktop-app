@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline';">
+  <title>PostgreSQL Explorer</title>
+  <link rel="stylesheet" href="src/styles/main.css">
+</head>
+<body class="dark-mode">
+  <div id="root">
+    <div class="login-container">
+      <div class="theme-toggle">
+        <button id="theme-toggle-btn">☀️</button>
+      </div>
+      
+      <div class="login-card">
+        <div class="login-header">
+          <h1>PostgreSQL Explorer</h1>
+          <p>Connect to your database</p>
+        </div>
+        
+        <form class="login-form" id="login-form">
+          <div class="form-group">
+            <label for="host">Host</label>
+            <input
+              type="text"
+              id="host"
+              placeholder="localhost"
+              value="localhost"
+            />
+          </div>
+          
+          <div class="form-group">
+            <label for="port">Port</label>
+            <input
+              type="text"
+              id="port"
+              placeholder="5432"
+              value="5432"
+            />
+          </div>
+          
+          <div class="form-group">
+            <label for="username">Username</label>
+            <input
+              type="text"
+              id="username"
+              placeholder="postgres"
+              value="brosmar"
+            />
+          </div>
+          
+          <div class="form-group">
+            <label for="password">Password</label>
+            <input
+              type="password"
+              id="password"
+              placeholder="Enter your password"
+              required
+            />
+          </div>
+          
+          <div class="form-options">
+            <div class="remember-me">
+              <input
+                type="checkbox"
+                id="remember"
+              />
+              <label for="remember">Remember connection</label>
+            </div>
+          </div>
+          
+          <button type="submit" class="login-button">Connect</button>
+        </form>
+        
+        <div id="login-error" class="login-error"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="src/app.js"></script>
+</body>
+</html>

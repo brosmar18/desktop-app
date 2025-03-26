@@ -1,0 +1,19 @@
+{
+  "name": "desktop-app",
+  "version": "1.0.0",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "PostgreSQL Explorer Electron App",
+  "devDependencies": {
+    "electron": "^35.0.3"
+  },
+  "dependencies": {
+    "pg": "^8.14.1",
+    "react": "^19.0.0"
+  }
+}
