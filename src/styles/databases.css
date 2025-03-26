@@ -775,3 +775,56 @@ td.error {
     width: auto;
   }
 }
+
+/* Add these styles to your databases.css file */
+
+.explorer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.refresh-button {
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  border: none;
+  background-color: rgba(255, 255, 255, 0.1);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.refresh-button:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+}
+
+.refresh-button:active {
+  transform: scale(0.95);
+}
+
+.refresh-button.refreshing svg {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Light mode overrides */
+.light-mode .refresh-button {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.light-mode .refresh-button:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+}

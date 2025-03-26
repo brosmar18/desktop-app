@@ -4,6 +4,7 @@ let currentTable = null;
 let allDatabases = [];
 let currentTables = [];
 let currentColumns = [];
+let isRefreshing = false;
 
 // Wait for DOM to be fully loaded before executing code
 document.addEventListener('DOMContentLoaded', async () => {
@@ -14,7 +15,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupSearch();
   setupTableViewInteractions();
   setupColumnViewInteractions();
-
+  setupRefreshButton();
+  
   // Initialize database context menu
   initDatabaseContextMenu();
 
@@ -22,12 +24,53 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadDatabases();
 });
 
+// Set up the refresh button
+function setupRefreshButton() {
+  const refreshBtn = document.getElementById('refresh-databases-btn');
+  
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', async () => {
+      // Prevent multiple refreshes at once
+      if (isRefreshing) return;
+      
+      try {
+        // Update button state
+        isRefreshing = true;
+        refreshBtn.classList.add('refreshing');
+        
+        // Clear search
+        const searchInput = document.getElementById('database-search');
+        if (searchInput) {
+          searchInput.value = '';
+        }
+        
+        // Reload databases
+        await loadDatabases();
+        
+        console.log('Databases refreshed successfully');
+      } catch (error) {
+        console.error('Error refreshing databases:', error);
+        
+        // Show error in database list
+        const databaseList = document.getElementById('database-list');
+        if (databaseList) {
+          databaseList.innerHTML = `<li class="list-item error">Error refreshing databases: ${error.message}</li>`;
+        }
+      } finally {
+        // Reset button state
+        isRefreshing = false;
+        refreshBtn.classList.remove('refreshing');
+      }
+    });
+  }
+}
+
 // Initialize the database context menu
 function initDatabaseContextMenu() {
   // We'll use a dynamic import to load our module
   import('../components/Menu.js').then(module => {
     const contextMenu = module.default;
-
+    
     // Configure menu items with simplified labels
     const databaseMenuItems = [
       {
@@ -45,24 +88,24 @@ function initDatabaseContextMenu() {
         onClick: (target) => {
           const dbName = target.textContent || target.getAttribute('data-db-name');
           console.log(`Clone database: ${dbName}`);
-
+          
           // Get new name for the cloned database
           const newName = prompt(`Enter a name for the clone of "${dbName}":`, `${dbName}_clone`);
-
+          
           if (newName) {
             // Check if the name is valid
             if (newName.trim() === '') {
               alert('Database name cannot be empty.');
               return;
             }
-
+            
             // Check if the database already exists (simplified check, in real app would check against backend)
             const exists = allDatabases.some(db => db.name.toLowerCase() === newName.toLowerCase());
             if (exists) {
               alert(`A database with the name "${newName}" already exists.`);
               return;
             }
-
+            
             alert(`Clone functionality for "${dbName}" to "${newName}" will be implemented in a future update.`);
           }
         }
@@ -82,29 +125,29 @@ function initDatabaseContextMenu() {
         onClick: (target) => {
           const dbName = target.textContent || target.getAttribute('data-db-name');
           console.log(`Rename database: ${dbName}`);
-
+          
           // Get new name for the database
           const newName = prompt(`Enter a new name for database "${dbName}":`, dbName);
-
+          
           if (newName) {
             // Check if the name is valid
             if (newName.trim() === '') {
               alert('Database name cannot be empty.');
               return;
             }
-
+            
             // Check if the name is unchanged
             if (newName === dbName) {
               return; // No change needed
             }
-
+            
             // Check if the database already exists (simplified check, in real app would check against backend)
             const exists = allDatabases.some(db => db.name.toLowerCase() === newName.toLowerCase());
             if (exists) {
               alert(`A database with the name "${newName}" already exists.`);
               return;
             }
-
+            
             alert(`Rename functionality for "${dbName}" to "${newName}" will be implemented in a future update.`);
           }
         }
@@ -116,103 +159,20 @@ function initDatabaseContextMenu() {
         onClick: (target) => {
           const dbName = target.textContent || target.getAttribute('data-db-name');
           console.log(`Delete database: ${dbName}`);
-
+          
           if (confirm(`Are you sure you want to delete the database "${dbName}"? This action cannot be undone.`)) {
             alert(`Delete functionality for "${dbName}" will be implemented in a future update.`);
           }
         }
       }
     ];
-
+    
     contextMenu.setMenuItems(databaseMenuItems);
   }).catch(error => {
     console.error('Error loading context menu module:', error);
   });
 }
-// We'll use a dynamic import to load our module
-import('../components/Menu.js').then(module => {
-  const contextMenu = module.default;
 
-  // Configure menu items for databases
-  const databaseMenuItems = [
-    {
-      label: 'Connect to Database',
-      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M6 9a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 0 1h-3A.5.5 0 0 1 6 9z"/><path d="M4.5 5a.5.5 0 0 0-.5.5v5a.5.5 0 0 0 .5.5h7a.5.5 0 0 0 .5-.5v-5a.5.5 0 0 0-.5-.5h-7zm0-1h7A1.5 1.5 0 0 1 13 5.5v5a1.5 1.5 0 0 1-1.5 1.5h-7A1.5 1.5 0 0 1 3 10.5v-5A1.5 1.5 0 0 1 4.5 4z"/></svg>',
-      onClick: (target) => {
-        const dbName = target.textContent || target.getAttribute('data-db-name');
-        console.log(`Connect to database: ${dbName}`);
-        loadTables(dbName);
-      }
-    },
-    {
-      label: 'View Tables',
-      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zm2-1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H2z"/><path d="M4 8V4h8v4H4zm8 2v4H4v-4h8z"/></svg>',
-      onClick: (target) => {
-        const dbName = target.textContent || target.getAttribute('data-db-name');
-        console.log(`View tables for database: ${dbName}`);
-        loadTables(dbName);
-      }
-    },
-    { type: 'separator' },
-    {
-      label: 'Backup Database',
-      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/><path d="M7.646 1.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 2.707V11.5a.5.5 0 0 1-1 0V2.707L5.354 4.854a.5.5 0 1 1-.708-.708l3-3z"/></svg>',
-      onClick: (target) => {
-        const dbName = target.textContent || target.getAttribute('data-db-name');
-        console.log(`Backup database: ${dbName}`);
-        alert(`Backup functionality for "${dbName}" will be implemented in a future update.`);
-      }
-    },
-    {
-      label: 'Restore Database',
-      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M.5 3a.5.5 0 0 0-.5.5v9a.5.5 0 0 0 .5.5h10.042a3 3 0 0 0 3-3V3.5a.5.5 0 0 0-.5-.5H.5zM0 3.5A1.5 1.5 0 0 1 1.5 2h9A1.5 1.5 0 0 1 12 3.5v2.05a2.5 2.5 0 0 0 0 4.9v2.05A1.5 1.5 0 0 1 10.5 14h-9A1.5 1.5 0 0 1 0 12.5v-9z"/></svg>',
-      onClick: (target) => {
-        const dbName = target.textContent || target.getAttribute('data-db-name');
-        console.log(`Restore database: ${dbName}`);
-        window.location.href = '../pages/Restore.html';
-      }
-    },
-    { type: 'separator' },
-    {
-      label: 'Rename Database',
-      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207 11.207 2.5zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293l6.5-6.5zm-9.761 5.175-.106.106-1.528 3.821 3.821-1.528.106-.106A.5.5 0 0 1 5 12.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.468-.325z"/></svg>',
-      onClick: (target) => {
-        const dbName = target.textContent || target.getAttribute('data-db-name');
-        console.log(`Rename database: ${dbName}`);
-        // For now, just show an alert
-        alert(`Rename functionality for "${dbName}" will be implemented in a future update.`);
-      }
-    },
-    {
-      label: 'View Properties',
-      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/><path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/></svg>',
-      onClick: (target) => {
-        const dbName = target.textContent || target.getAttribute('data-db-name');
-        console.log(`View properties for database: ${dbName}`);
-        // For now, just show an alert
-        alert(`Database properties for "${dbName}" will be implemented in a future update.`);
-      }
-    },
-    { type: 'separator' },
-    {
-      label: 'Delete Database',
-      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>',
-      danger: true,
-      onClick: (target) => {
-        const dbName = target.textContent || target.getAttribute('data-db-name');
-        console.log(`Delete database: ${dbName}`);
-
-        if (confirm(`Are you sure you want to delete the database "${dbName}"? This action cannot be undone.`)) {
-          alert(`Delete functionality for "${dbName}" will be implemented in a future update.`);
-        }
-      }
-    }
-  ];
-
-  contextMenu.setMenuItems(databaseMenuItems);
-}).catch(error => {
-  console.error('Error loading context menu module:', error);
-});
 // Set up logout button
 function setupLogout() {
   const logoutBtn = document.getElementById('logout-btn');
@@ -357,6 +317,16 @@ async function loadDatabases() {
 
     // Render the list
     renderDatabaseList(databases);
+    
+    // If a database was previously selected, try to restore that selection
+    if (currentDb) {
+      // Find the database in the list
+      const dbItem = document.querySelector(`#database-list .list-item[data-db-name="${currentDb}"]`);
+      if (dbItem) {
+        // Add active class
+        dbItem.classList.add('active');
+      }
+    }
   } catch (error) {
     console.error('Error loading databases:', error);
     const databaseList = document.getElementById('database-list');
@@ -405,22 +375,22 @@ function renderDatabaseList(databases) {
       // Load tables for selected database
       loadTables(db.name);
     });
-
+    
     // Add context menu handler
     li.addEventListener('contextmenu', async (e) => {
       e.preventDefault(); // Prevent default context menu
-
+      
       // Add active class to right-clicked item
       document.querySelectorAll('#database-list .list-item').forEach(item => {
         item.classList.remove('active');
       });
       li.classList.add('active');
-
+      
       // Load the context menu module on demand
       try {
         const module = await import('../components/Menu.js');
         const contextMenu = module.default;
-
+        
         // Show context menu at cursor position
         contextMenu.show(e.pageX, e.pageY, li);
       } catch (error) {
@@ -444,6 +414,14 @@ function filterDatabases(searchTerm) {
   );
 
   renderDatabaseList(filtered);
+  
+  // If the current database is still in the filtered list, highlight it
+  if (currentDb) {
+    const dbItem = document.querySelector(`#database-list .list-item[data-db-name="${currentDb}"]`);
+    if (dbItem) {
+      dbItem.classList.add('active');
+    }
+  }
 }
 
 // Load tables for a selected database
