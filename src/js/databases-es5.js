@@ -435,6 +435,21 @@ window.showDeleteModal = function (dbName) {
 window.showSqlQueryModal = function (dbName) {
   if (!window.globalModalManager || !window.modalTemplates) {
     console.error('Modal components not loaded yet');
+    
+    // Try to load dependencies if they're missing
+    if (!window.globalModalManager) {
+      const modalScript = document.createElement('script');
+      modalScript.src = '../utils/modal-global.js';
+      document.head.appendChild(modalScript);
+    }
+    
+    if (!window.modalTemplates) {
+      const templatesScript = document.createElement('script');
+      templatesScript.src = '../utils/modal-templates-global.js';
+      document.head.appendChild(templatesScript);
+    }
+    
+    // Try again in 500ms
     setTimeout(() => window.showSqlQueryModal(dbName), 500);
     return;
   }
@@ -447,13 +462,144 @@ window.showSqlQueryModal = function (dbName) {
   // Once the modal is shown, set up the SQL execution
   setTimeout(() => {
     const executeBtn = document.getElementById('execute-query-btn');
+    const clearBtn = document.getElementById('clear-query-btn');
     const queryInput = document.getElementById('sql-query');
     const resultsContainer = document.getElementById('query-results');
     const resultsCount = document.getElementById('query-results-count');
+    const sampleQueryBtns = document.querySelectorAll('.sample-query-btn');
 
     if (!executeBtn || !queryInput || !resultsContainer) {
       console.error('SQL query modal elements not found');
       return;
+    }
+
+    // Setup sample query buttons
+    sampleQueryBtns.forEach(btn => {
+      btn.addEventListener('click', async () => {
+        let query = btn.getAttribute('data-query');
+        
+        // If it's "List tables" button
+        if (btn.textContent === "List tables") {
+          queryInput.value = `SELECT tablename FROM pg_tables WHERE schemaname = 'public';`;
+        }
+        // If it's "List columns" button
+        else if (btn.textContent === "List columns") {
+          // First, get list of tables to choose from
+          try {
+            resultsContainer.innerHTML = '<div class="query-loading">Loading tables...</div>';
+            
+            const tablesResult = await window.dbOperations.executeQuery(
+              dbName, 
+              "SELECT tablename FROM pg_tables WHERE schemaname = 'public';"
+            );
+            
+            resultsContainer.innerHTML = '<div class="query-placeholder">Execute a query to see results</div>';
+            
+            if (tablesResult.success && tablesResult.rows && tablesResult.rows.length > 0) {
+              // Create a dropdown of tables in the modal
+              const tableList = document.createElement('div');
+              tableList.className = 'table-selection';
+              tableList.innerHTML = '<div class="table-selection-title">Select a table to view columns:</div>';
+              
+              tablesResult.rows.forEach(row => {
+                const tableBtn = document.createElement('button');
+                tableBtn.className = 'table-selection-btn';
+                tableBtn.textContent = row.tablename;
+                tableBtn.addEventListener('click', () => {
+                  queryInput.value = `SELECT column_name, data_type, is_nullable 
+                                      FROM information_schema.columns 
+                                      WHERE table_name = '${row.tablename}';`;
+                  tableList.remove();
+                  queryInput.focus();
+                });
+                tableList.appendChild(tableBtn);
+              });
+              
+              // Add a close button
+              const closeBtn = document.createElement('button');
+              closeBtn.className = 'table-selection-close';
+              closeBtn.textContent = '×';
+              closeBtn.addEventListener('click', () => {
+                tableList.remove();
+              });
+              tableList.appendChild(closeBtn);
+              
+              document.querySelector('.modal-body').appendChild(tableList);
+            } else {
+              queryInput.value = `SELECT column_name, data_type, is_nullable 
+                                 FROM information_schema.columns 
+                                 WHERE table_name = 'your_table_name';`;
+            }
+          } catch(err) {
+            console.error('Error getting tables:', err);
+            queryInput.value = `SELECT column_name, data_type, is_nullable 
+                               FROM information_schema.columns 
+                               WHERE table_name = 'your_table_name';`;
+          }
+        }
+        // If it's "Preview table" button
+        else if (btn.textContent === "Preview table") {
+          // Same approach as for columns
+          try {
+            resultsContainer.innerHTML = '<div class="query-loading">Loading tables...</div>';
+            
+            const tablesResult = await window.dbOperations.executeQuery(
+              dbName, 
+              "SELECT tablename FROM pg_tables WHERE schemaname = 'public';"
+            );
+            
+            resultsContainer.innerHTML = '<div class="query-placeholder">Execute a query to see results</div>';
+            
+            if (tablesResult.success && tablesResult.rows && tablesResult.rows.length > 0) {
+              const tableList = document.createElement('div');
+              tableList.className = 'table-selection';
+              tableList.innerHTML = '<div class="table-selection-title">Select a table to preview:</div>';
+              
+              tablesResult.rows.forEach(row => {
+                const tableBtn = document.createElement('button');
+                tableBtn.className = 'table-selection-btn';
+                tableBtn.textContent = row.tablename;
+                tableBtn.addEventListener('click', () => {
+                  queryInput.value = `SELECT * FROM "${row.tablename}" LIMIT 50;`;
+                  tableList.remove();
+                  queryInput.focus();
+                });
+                tableList.appendChild(tableBtn);
+              });
+              
+              const closeBtn = document.createElement('button');
+              closeBtn.className = 'table-selection-close';
+              closeBtn.textContent = '×';
+              closeBtn.addEventListener('click', () => {
+                tableList.remove();
+              });
+              tableList.appendChild(closeBtn);
+              
+              document.querySelector('.modal-body').appendChild(tableList);
+            } else {
+              queryInput.value = `SELECT * FROM your_table_name LIMIT 50;`;
+            }
+          } catch(err) {
+            console.error('Error getting tables:', err);
+            queryInput.value = `SELECT * FROM your_table_name LIMIT 50;`;
+          }
+        }
+        else {
+          queryInput.value = query;
+        }
+        
+        queryInput.focus();
+      });
+    });
+
+    // Setup clear button
+    if (clearBtn) {
+      clearBtn.addEventListener('click', () => {
+        queryInput.value = '';
+        resultsContainer.innerHTML = '<div class="query-placeholder">Execute a query to see results</div>';
+        resultsCount.textContent = '';
+        queryInput.focus();
+      });
     }
 
     // Execute query when button is clicked
@@ -467,71 +613,122 @@ window.showSqlQueryModal = function (dbName) {
 
       // Show loading indicator
       resultsContainer.innerHTML = '<div class="query-loading">Executing query...</div>';
+      resultsCount.textContent = '';
+      
+      // Disable the execute button
+      executeBtn.disabled = true;
+      executeBtn.textContent = 'Executing...';
+      executeBtn.classList.add('executing');
+      
+      // Add a spinner
+      const spinner = document.createElement('div');
+      spinner.className = 'spinner';
+      resultsContainer.appendChild(spinner);
 
       try {
-        // Call the database operation service
-        if (window.dbOperations) {
-          const result = await window.dbOperations.executeQuery(dbName, query);
+        console.log(`Sending query to execute: ${query}`);
+        
+        // Set a UI timeout in case the backend doesn't respond
+        const timeoutId = setTimeout(() => {
+          if (executeBtn.disabled) {
+            resultsContainer.innerHTML = '<div class="query-error">Query execution is taking longer than expected. This might be due to a large result set or a complex query. You can wait or try again with a more specific query.</div>';
+          }
+        }, 10000); // 10 seconds UI feedback
+        
+        // Execute query
+        const result = await window.dbOperations.executeQuery(dbName, query);
+        
+        // Clear the timeout since we got a response
+        clearTimeout(timeoutId);
+        
+        console.log('Query execution completed:', result);
 
-          if (result.success) {
-            // Display results
-            if (result.rows && result.rows.length > 0) {
-              // Create a table for the results
-              const table = document.createElement('table');
-              table.className = 'query-results-table';
+        if (result.success) {
+          if (result.rows && result.rows.length > 0) {
+            // Check if result set is too large
+            let rowsToDisplay = result.rows;
+            let rowLimitMessage = '';
+            
+            // If more than 100 rows, only display first 100
+            if (result.rows.length > 100) {
+              rowsToDisplay = result.rows.slice(0, 100);
+              rowLimitMessage = `<div class="query-warning">Showing first 100 rows of ${result.rows.length} total rows. Add LIMIT to your query to reduce result size.</div>`;
+            }
+            
+            // Create a table for the results
+            const table = document.createElement('table');
+            table.className = 'query-results-table';
 
-              // Create header row
-              const thead = document.createElement('thead');
-              const headerRow = document.createElement('tr');
+            // Create header row
+            const thead = document.createElement('thead');
+            const headerRow = document.createElement('tr');
+
+            result.columns.forEach(column => {
+              const th = document.createElement('th');
+              th.textContent = column;
+              headerRow.appendChild(th);
+            });
+
+            thead.appendChild(headerRow);
+            table.appendChild(thead);
+
+            // Create body rows
+            const tbody = document.createElement('tbody');
+
+            // Render the rows with limits
+            rowsToDisplay.forEach(row => {
+              const tr = document.createElement('tr');
 
               result.columns.forEach(column => {
-                const th = document.createElement('th');
-                th.textContent = column;
-                headerRow.appendChild(th);
+                const td = document.createElement('td');
+                
+                if (row[column] === null) {
+                  td.innerHTML = '<span class="null-value">NULL</span>';
+                } else if (typeof row[column] === 'object') {
+                  td.textContent = JSON.stringify(row[column]);
+                } else {
+                  // Truncate long text values to prevent rendering issues
+                  const cellValue = String(row[column]);
+                  if (cellValue.length > 100) {
+                    td.textContent = cellValue.substring(0, 100) + '...';
+                    td.title = cellValue; // Full value on hover
+                    td.classList.add('truncated');
+                  } else {
+                    td.textContent = cellValue;
+                  }
+                }
+                
+                tr.appendChild(td);
               });
 
-              thead.appendChild(headerRow);
-              table.appendChild(thead);
+              tbody.appendChild(tr);
+            });
 
-              // Create body rows
-              const tbody = document.createElement('tbody');
+            table.appendChild(tbody);
 
-              result.rows.forEach(row => {
-                const tr = document.createElement('tr');
+            // Update results container
+            resultsContainer.innerHTML = rowLimitMessage;
+            resultsContainer.appendChild(table);
 
-                result.columns.forEach(column => {
-                  const td = document.createElement('td');
-                  td.textContent = row[column] !== undefined ? row[column] : '';
-                  tr.appendChild(td);
-                });
-
-                tbody.appendChild(tr);
-              });
-
-              table.appendChild(tbody);
-
-              // Update results container
-              resultsContainer.innerHTML = '';
-              resultsContainer.appendChild(table);
-
-              // Update count
-              resultsCount.textContent = `${result.rows.length} row${result.rows.length !== 1 ? 's' : ''} returned`;
-            } else {
-              resultsContainer.innerHTML = '<div class="query-success">Query executed successfully. No rows returned.</div>';
-              resultsCount.textContent = '';
-            }
+            // Update count
+            resultsCount.textContent = `${result.rows.length} row${result.rows.length !== 1 ? 's' : ''} returned${rowsToDisplay.length < result.rows.length ? ` (showing ${rowsToDisplay.length})` : ''}`;
           } else {
-            resultsContainer.innerHTML = `<div class="query-error">Error: ${result.error}</div>`;
+            resultsContainer.innerHTML = '<div class="query-success">Query executed successfully. No rows returned.</div>';
             resultsCount.textContent = '';
           }
         } else {
-          // Fallback for backward compatibility
-          resultsContainer.innerHTML = '<div class="query-error">SQL execution functionality not available</div>';
+          resultsContainer.innerHTML = `<div class="query-error">Error: ${result.error}</div>`;
           resultsCount.textContent = '';
         }
       } catch (error) {
+        console.error('Error in query execution:', error);
         resultsContainer.innerHTML = `<div class="query-error">Error: ${error.message || 'An unknown error occurred'}</div>`;
         resultsCount.textContent = '';
+      } finally {
+        // Re-enable the execute button
+        executeBtn.disabled = false;
+        executeBtn.textContent = 'Execute Query';
+        executeBtn.classList.remove('executing');
       }
     });
 
@@ -539,6 +736,7 @@ window.showSqlQueryModal = function (dbName) {
     queryInput.focus();
   }, 100);
 };
+
 // Set up the refresh button
 function setupRefreshButton() {
   const refreshBtn = document.getElementById('refresh-databases-btn');

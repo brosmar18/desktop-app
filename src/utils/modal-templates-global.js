@@ -175,10 +175,17 @@ window.modalTemplates = {
       <div class="modal-body">
         <div class="modal-form-group">
           <label for="sql-query">SQL Query</label>
-          <textarea id="sql-query" name="query" rows="6" placeholder="SELECT * FROM your_table LIMIT 10;" class="sql-editor"></textarea>
+          <textarea id="sql-query" name="query" rows="8" placeholder="SELECT * FROM information_schema.tables WHERE table_schema = 'public';" class="sql-editor"></textarea>
+          <div class="query-samples">
+            <span class="sample-title">Sample queries:</span>
+            <button type="button" class="sample-query-btn" data-query="SELECT tablename FROM pg_tables WHERE schemaname = 'public';">List tables</button>
+            <button type="button" class="sample-query-btn" data-query="SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_name = '[table_name]';">List columns</button>
+            <button type="button" class="sample-query-btn" data-query="SELECT * FROM [table_name] LIMIT 10;">Preview table</button>
+          </div>
         </div>
         <div class="query-actions">
           <button type="button" id="execute-query-btn" class="modal-btn modal-submit-btn">Execute Query</button>
+          <button type="button" id="clear-query-btn" class="modal-btn modal-cancel-btn">Clear</button>
         </div>
         <div class="query-results-container">
           <div class="query-results-header">

@@ -1,14 +1,19 @@
 // Preload script for Electron
 const { contextBridge, ipcRenderer } = require('electron');
 
+// List of valid channels for sending/receiving messages with main process
+const validSendChannels = ['pgConnect', 'logout', 'setTheme'];
+const validReceiveChannels = ['pgConnectResponse', 'logoutResponse', 'themeChanged', 'restoreProgress'];
+const validInvokeChannels = ['getConnectionInfo', 'getDatabases', 'getTables', 'getColumns', 
+                         'createDatabase', 'selectBackupFile', 'restoreDatabase', 'cloneDatabase',
+                         'executeQuery']; // Add executeQuery to the list
+
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object
 contextBridge.exposeInMainWorld(
   'api', {
     // Send a message to the main process
     send: (channel, data) => {
-      // Only allow certain channels for security reasons
-      const validSendChannels = ['pgConnect', 'logout', 'setTheme'];
       if (validSendChannels.includes(channel)) {
         ipcRenderer.send(channel, data);
       }
@@ -16,13 +21,6 @@ contextBridge.exposeInMainWorld(
     
     // Receive a message from the main process
     receive: (channel, func) => {
-      const validReceiveChannels = [
-        'pgConnectResponse', 
-        'logoutResponse', 
-        'themeChanged',
-        'restoreProgress'
-      ];
-      
       if (validReceiveChannels.includes(channel)) {
         // Remove previous listeners to avoid duplicates
         ipcRenderer.removeAllListeners(channel);
@@ -34,41 +32,68 @@ contextBridge.exposeInMainWorld(
     
     // Get connection info from the main process (async)
     getConnectionInfo: async () => {
-      return await ipcRenderer.invoke('getConnectionInfo');
+      if (validInvokeChannels.includes('getConnectionInfo')) {
+        return await ipcRenderer.invoke('getConnectionInfo');
+      }
     },
     
     // Database operations
     getDatabases: async () => {
-      return await ipcRenderer.invoke('getDatabases');
+      if (validInvokeChannels.includes('getDatabases')) {
+        return await ipcRenderer.invoke('getDatabases');
+      }
     },
     
     getTables: async (dbName) => {
-      return await ipcRenderer.invoke('getTables', dbName);
+      if (validInvokeChannels.includes('getTables')) {
+        return await ipcRenderer.invoke('getTables', dbName);
+      }
     },
     
     getColumns: async (dbName, tableName) => {
-      return await ipcRenderer.invoke('getColumns', dbName, tableName);
+      if (validInvokeChannels.includes('getColumns')) {
+        return await ipcRenderer.invoke('getColumns', dbName, tableName);
+      }
     },
     
     // Create a new database
     createDatabase: async (options) => {
-      return await ipcRenderer.invoke('createDatabase', options);
+      if (validInvokeChannels.includes('createDatabase')) {
+        return await ipcRenderer.invoke('createDatabase', options);
+      }
     },
     
     // Select backup file using dialog
     selectBackupFile: async () => {
-      return await ipcRenderer.invoke('selectBackupFile');
+      if (validInvokeChannels.includes('selectBackupFile')) {
+        return await ipcRenderer.invoke('selectBackupFile');
+      }
     },
     
     // Restore database from backup
     restoreDatabase: async (options) => {
-      return await ipcRenderer.invoke('restoreDatabase', options);
+      if (validInvokeChannels.includes('restoreDatabase')) {
+        return await ipcRenderer.invoke('restoreDatabase', options);
+      }
     },
     
-    // Clone database (new method)
+    // Clone database
     cloneDatabase: async (options) => {
-      console.log('preload.js cloneDatabase called with:', options);
-      return await ipcRenderer.invoke('cloneDatabase', options);
+      if (validInvokeChannels.includes('cloneDatabase')) {
+        console.log('preload.js cloneDatabase called with:', options);
+        return await ipcRenderer.invoke('cloneDatabase', options);
+      }
+    },
+    
+    // Execute SQL query (NEW)
+    executeQuery: async (dbName, query) => {
+      console.log('preload.js executeQuery called with dbName:', dbName);
+      if (validInvokeChannels.includes('executeQuery')) {
+        return await ipcRenderer.invoke('executeQuery', dbName, query);
+      } else {
+        console.error('executeQuery not in validInvokeChannels!');
+        throw new Error('executeQuery not registered as valid channel');
+      }
     }
   }
 );

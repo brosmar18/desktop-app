@@ -150,3 +150,22 @@ async function cloneDatabase(sourceDb, targetDb, withData) {
     throw error;
   }
 }
+
+// Execute SQL query (NEW)
+async function executeQuery(dbName, query) {
+  if (!window.api) {
+    throw new Error('API not available');
+  }
+
+  if (!window.api.executeQuery) {
+    throw new Error('executeQuery method not available in API');
+  }
+
+  try {
+    console.log(`Calling API to execute query on ${dbName}`);
+    return await window.api.executeQuery(dbName, query);
+  } catch (error) {
+    console.error(`Error executing query on ${dbName}:`, error);
+    throw error;
+  }
+}

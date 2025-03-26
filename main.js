@@ -104,6 +104,7 @@ async function connectToPg(credentials) {
       host: credentials.host,
       port: credentials.port,
       user: credentials.user,
+      password: credentials.password,
       database: 'postgres',
       connectedAs: res.rows[0].user,
       currentDb: res.rows[0].db
@@ -137,6 +138,8 @@ async function closePgConnection() {
 
 // Set up all IPC handlers
 function setupIpcHandlers() {
+  console.log('Setting up IPC handlers...');
+  
   // Handle getting connection info (synchronous)
   ipcMain.handle('getConnectionInfo', async () => {
     return global.connectionInfo;
@@ -203,82 +206,191 @@ function setupIpcHandlers() {
     }
   });
 
-  // In main.js - Update the getTables function
-
   // Get tables for a database
-  // Get tables for a database
-ipcMain.handle('getTables', async (event, dbName) => {
-  try {
-    if (!pgClient) {
-      // Connection is missing - try to reconnect using stored credentials
-      if (global.connectionInfo) {
-        console.log('Reconnecting with stored credentials for user:', global.connectionInfo.user);
+  ipcMain.handle('getTables', async (event, dbName) => {
+    try {
+      if (!pgClient) {
+        // Connection is missing - try to reconnect using stored credentials
+        if (global.connectionInfo) {
+          console.log('Reconnecting with stored credentials for user:', global.connectionInfo.user);
 
-        // Create a new connection to PostgreSQL using stored credentials
+          // Create a new connection to PostgreSQL using stored credentials
+          pgClient = new Client({
+            host: global.connectionInfo.host,
+            port: global.connectionInfo.port,
+            user: global.connectionInfo.user,
+            password: global.connectionInfo.password, // This should be stored securely
+            database: 'postgres' // Connect to default postgres database first
+          });
+
+          await pgClient.connect();
+        } else {
+          throw new Error('Not connected to PostgreSQL and no stored credentials');
+        }
+      }
+
+      // Close the existing connection
+      await pgClient.end();
+
+      // Create a new connection to the selected database
+      pgClient = new Client({
+        host: global.connectionInfo.host,
+        port: global.connectionInfo.port,
+        user: global.connectionInfo.user,
+        password: global.connectionInfo.password,
+        database: dbName // Connect directly to the selected database
+      });
+
+      // Connect to the database
+      await pgClient.connect();
+      console.log(`Connected to database: ${dbName}`);
+
+      // Update the global connection info
+      global.connectionInfo.database = dbName;
+      global.connectionInfo.currentDb = dbName;
+
+      // Modified query to include column counts for each table
+      const query = `
+        SELECT 
+          t.table_name AS name,
+          COUNT(c.column_name) AS column_count
+        FROM 
+          information_schema.tables t
+        LEFT JOIN 
+          information_schema.columns c 
+        ON 
+          t.table_name = c.table_name AND 
+          t.table_schema = c.table_schema
+        WHERE 
+          t.table_schema = 'public'
+        GROUP BY 
+          t.table_name
+        ORDER BY 
+          t.table_name
+      `;
+
+      const result = await pgClient.query(query);
+      console.log(`Found ${result.rows.length} tables in ${dbName}`);
+      return result.rows;
+    } catch (error) {
+      console.error(`Error fetching tables for ${dbName}:`, error);
+      throw error;
+    }
+  });
+
+  // Get columns for a table
+  ipcMain.handle('getColumns', async (event, dbName, tableName) => {
+    try {
+      if (!pgClient) {
+        throw new Error('Not connected to PostgreSQL');
+      }
+
+      // Ensure we're connected to the right database
+      if (global.connectionInfo.database !== dbName) {
+        // Close the existing connection
+        await pgClient.end();
+
+        // Create a new connection to the selected database
         pgClient = new Client({
           host: global.connectionInfo.host,
           port: global.connectionInfo.port,
           user: global.connectionInfo.user,
-          password: global.connectionInfo.password, // This should be stored securely
-          database: 'postgres' // Connect to default postgres database first
+          password: global.connectionInfo.password,
+          database: dbName // Connect directly to the selected database
         });
 
+        // Connect to the database
         await pgClient.connect();
-      } else {
-        throw new Error('Not connected to PostgreSQL and no stored credentials');
+        console.log(`Connected to database: ${dbName} for column query`);
+
+        // Update the global connection info
+        global.connectionInfo.database = dbName;
+        global.connectionInfo.currentDb = dbName;
       }
-    }
 
-    // Close the existing connection
-    await pgClient.end();
-
-    // Create a new connection to the selected database
-    pgClient = new Client({
-      host: global.connectionInfo.host,
-      port: global.connectionInfo.port,
-      user: global.connectionInfo.user,
-      password: global.connectionInfo.password,
-      database: dbName // Connect directly to the selected database
-    });
-
-    // Connect to the database
-    await pgClient.connect();
-    console.log(`Connected to database: ${dbName}`);
-
-    // Update the global connection info
-    global.connectionInfo.database = dbName;
-    global.connectionInfo.currentDb = dbName;
-
-    // Modified query to include column counts for each table
-    const query = `
+      const query = `
       SELECT 
-        t.table_name AS name,
-        COUNT(c.column_name) AS column_count
-      FROM 
-        information_schema.tables t
-      LEFT JOIN 
-        information_schema.columns c 
-      ON 
-        t.table_name = c.table_name AND 
-        t.table_schema = c.table_schema
-      WHERE 
-        t.table_schema = 'public'
-      GROUP BY 
-        t.table_name
-      ORDER BY 
-        t.table_name
+        column_name AS name, 
+        data_type AS type,
+        CASE WHEN is_nullable = 'YES' THEN true ELSE false END AS nullable,
+        column_default AS default
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = $1
+      ORDER BY ordinal_position
     `;
 
-    const result = await pgClient.query(query);
-    console.log(`Found ${result.rows.length} tables in ${dbName}`);
-    return result.rows;
-  } catch (error) {
-    console.error(`Error fetching tables for ${dbName}:`, error);
-    throw error;
-  }
-});
+      const result = await pgClient.query(query, [tableName]);
+      console.log(`Found ${result.rows.length} columns in table ${tableName}`);
+      return result.rows;
+    } catch (error) {
+      console.error(`Error fetching columns for ${tableName}:`, error);
+      throw error;
+    }
+  });
 
-  // Clone database
+  // Create a new database
+  ipcMain.handle('createDatabase', async (event, options) => {
+    try {
+      if (!pgClient) {
+        throw new Error('Not connected to PostgreSQL');
+      }
+
+      // Validate options
+      if (!options.name) {
+        throw new Error('Database name is required');
+      }
+
+      // Build create database query
+      let query = `CREATE DATABASE "${options.name}"`;
+
+      // Add owner if specified
+      if (options.owner) {
+        query += ` OWNER "${options.owner}"`;
+      }
+
+      // Add encoding if specified
+      if (options.encoding) {
+        query += ` ENCODING '${options.encoding}'`;
+      }
+
+      // Add template if specified
+      if (options.template) {
+        query += ` TEMPLATE ${options.template}`;
+      }
+
+      console.log('Creating database with query:', query);
+
+      // Execute query
+      await pgClient.query(query);
+
+      return { success: true };
+    } catch (error) {
+      console.error(`Error creating database ${options.name}:`, error);
+      throw error;
+    }
+  });
+
+  // Select backup file
+  ipcMain.handle('selectBackupFile', async () => {
+    if (!mainWindow) {
+      throw new Error('No active window');
+    }
+
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: 'Select PostgreSQL Backup File',
+      filters: [
+        { name: 'PostgreSQL Backup', extensions: ['backup'] },
+        { name: 'All Files', extensions: ['*'] }
+      ],
+      properties: ['openFile']
+    });
+
+    return {
+      canceled: result.canceled,
+      filePath: result.filePaths[0]
+    };
+  });
+
   // Clone database
   ipcMain.handle('cloneDatabase', async (event, options) => {
     try {
@@ -298,7 +410,7 @@ ipcMain.handle('getTables', async (event, dbName) => {
       // Check if target database already exists
       const checkQuery = `
       SELECT datname FROM pg_database WHERE datname = $1
-    `;
+      `;
       const checkResult = await pgClient.query(checkQuery, [options.targetDb]);
 
       if (checkResult.rows.length > 0) {
@@ -558,172 +670,7 @@ ipcMain.handle('getTables', async (event, dbName) => {
     }
   });
 
-  // Update the connect function to store password securely
-  async function connectToPg(credentials) {
-    console.log('Attempting to connect to PostgreSQL:', {
-      host: credentials.host,
-      port: credentials.port,
-      user: credentials.user,
-      // Don't log the password
-      database: 'postgres' // Default database
-    });
-
-    // Close existing connection if any
-    await closePgConnection();
-
-    // Create new client
-    pgClient = new Client({
-      host: credentials.host,
-      port: credentials.port,
-      user: credentials.user,
-      password: credentials.password,
-      database: 'postgres' // Default to postgres database
-    });
-
-    try {
-      // Connect to PostgreSQL
-      await pgClient.connect();
-      console.log('Successfully connected to PostgreSQL');
-
-      // Test connection with a simple query
-      const res = await pgClient.query('SELECT current_database() as db, current_user as user');
-      console.log('Query result:', res.rows[0]);
-
-      // Store connection info for the home page
-      global.connectionInfo = {
-        host: credentials.host,
-        port: credentials.port,
-        user: credentials.user,
-        password: credentials.password, // Store password in memory for reconnection
-        database: 'postgres',
-        connectedAs: res.rows[0].user,
-        currentDb: res.rows[0].db
-      };
-
-      return { success: true, data: res.rows[0] };
-    } catch (error) {
-      console.error('PostgreSQL connection error:', error);
-
-      // Clean up failed connection
-      await closePgConnection();
-
-      return { success: false, error: error.message || 'Failed to connect to PostgreSQL server' };
-    }
-  }
-  // Get columns for a table
-  ipcMain.handle('getColumns', async (event, dbName, tableName) => {
-    try {
-      if (!pgClient) {
-        throw new Error('Not connected to PostgreSQL');
-      }
-
-      // Ensure we're connected to the right database
-      if (global.connectionInfo.database !== dbName) {
-        // Close the existing connection
-        await pgClient.end();
-
-        // Create a new connection to the selected database
-        pgClient = new Client({
-          host: global.connectionInfo.host,
-          port: global.connectionInfo.port,
-          user: global.connectionInfo.user,
-          password: global.connectionInfo.password,
-          database: dbName // Connect directly to the selected database
-        });
-
-        // Connect to the database
-        await pgClient.connect();
-        console.log(`Connected to database: ${dbName} for column query`);
-
-        // Update the global connection info
-        global.connectionInfo.database = dbName;
-        global.connectionInfo.currentDb = dbName;
-      }
-
-      const query = `
-      SELECT 
-        column_name AS name, 
-        data_type AS type,
-        CASE WHEN is_nullable = 'YES' THEN true ELSE false END AS nullable,
-        column_default AS default
-      FROM information_schema.columns
-      WHERE table_schema = 'public' AND table_name = $1
-      ORDER BY ordinal_position
-    `;
-
-      const result = await pgClient.query(query, [tableName]);
-      console.log(`Found ${result.rows.length} columns in table ${tableName}`);
-      return result.rows;
-    } catch (error) {
-      console.error(`Error fetching columns for ${tableName}:`, error);
-      throw error;
-    }
-  });
-
-  // Create a new database
-  ipcMain.handle('createDatabase', async (event, options) => {
-    try {
-      if (!pgClient) {
-        throw new Error('Not connected to PostgreSQL');
-      }
-
-      // Validate options
-      if (!options.name) {
-        throw new Error('Database name is required');
-      }
-
-      // Build create database query
-      let query = `CREATE DATABASE "${options.name}"`;
-
-      // Add owner if specified
-      if (options.owner) {
-        query += ` OWNER "${options.owner}"`;
-      }
-
-      // Add encoding if specified
-      if (options.encoding) {
-        query += ` ENCODING '${options.encoding}'`;
-      }
-
-      // Add template if specified
-      if (options.template) {
-        query += ` TEMPLATE ${options.template}`;
-      }
-
-      console.log('Creating database with query:', query);
-
-      // Execute query
-      await pgClient.query(query);
-
-      return { success: true };
-    } catch (error) {
-      console.error(`Error creating database ${options.name}:`, error);
-      throw error;
-    }
-  });
-
-  // Select backup file
-  ipcMain.handle('selectBackupFile', async () => {
-    if (!mainWindow) {
-      throw new Error('No active window');
-    }
-
-    const result = await dialog.showOpenDialog(mainWindow, {
-      title: 'Select PostgreSQL Backup File',
-      filters: [
-        { name: 'PostgreSQL Backup', extensions: ['backup'] },
-        { name: 'All Files', extensions: ['*'] }
-      ],
-      properties: ['openFile']
-    });
-
-    return {
-      canceled: result.canceled,
-      filePath: result.filePaths[0]
-    };
-  });
-
-  // Restore database from backup (fixed version)
+  // Restore database from backup
   ipcMain.handle('restoreDatabase', async (event, options) => {
     try {
       if (!pgClient) {
@@ -931,14 +878,90 @@ ipcMain.handle('getTables', async (event, dbName) => {
       throw error;
     }
   });
-} // <-- This closing brace was missing
+
+  // Execute SQL query - NEW
+  console.log('Registering executeQuery handler...');
+  ipcMain.handle('executeQuery', async (event, dbName, query) => {
+    console.log(`IPC: Executing query on ${dbName}: ${query.substring(0, 100)}${query.length > 100 ? '...' : ''}`);
+    
+    let tempClient = null;
+    
+    try {
+      // Create a dedicated client for this query
+      tempClient = new Client({
+        host: global.connectionInfo.host,
+        port: global.connectionInfo.port,
+        user: global.connectionInfo.user,
+        password: global.connectionInfo.password,
+        database: dbName
+      });
+
+      // Connect with timeout
+      await Promise.race([
+        tempClient.connect(),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Connection timeout')), 5000)
+        )
+      ]);
+      
+      console.log(`Connected to database: ${dbName} for query execution`);
+      
+      // Execute the query with timeout
+      const queryPromise = tempClient.query(query);
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Query execution timeout (30s)')), 30000)
+      );
+      
+      const result = await Promise.race([queryPromise, timeoutPromise]);
+      console.log(`Query executed, received ${result.rowCount || 0} rows`);
+      
+      // Process the result
+      if (result.command === 'SELECT') {
+        return {
+          success: true,
+          command: result.command,
+          rowCount: result.rowCount,
+          rows: result.rows,
+          columns: result.fields.map(field => field.name)
+        };
+      } else {
+        return {
+          success: true,
+          command: result.command,
+          rowCount: result.rowCount || 0,
+          message: `${result.command} completed. ${result.rowCount || 0} rows affected.`
+        };
+      }
+    } catch (error) {
+      console.error(`Error executing query on ${dbName}:`, error);
+      return {
+        success: false,
+        error: error.message || 'Failed to execute query'
+      };
+    } finally {
+      // Always close the temporary client to avoid connection leaks
+      if (tempClient) {
+        try {
+          await tempClient.end();
+          console.log('Temp client closed after query execution');
+        } catch (err) {
+          console.error('Error closing temp client:', err);
+        }
+      }
+    }
+  });
+  
+  console.log('IPC handlers setup completed');
+}
 
 // ===== App Lifecycle =====
 
 // Create window when Electron has finished initialization
 app.whenReady().then(() => {
   createWindow();
+  console.log('Setting up IPC handlers from app.whenReady()...');
   setupIpcHandlers();
+  console.log('IPC handlers setup completed from app.whenReady()');
 
   // On macOS, recreate window when dock icon is clicked and no windows are open
   app.on('activate', () => {
