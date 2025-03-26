@@ -1,22 +1,27 @@
-// Global variables to track state
+// Global variables to track state and modules
 let currentDb = null;
 let currentTable = null;
 let allDatabases = [];
 let currentTables = [];
 let currentColumns = [];
 let isRefreshing = false;
+let modalManager = null;
+let modalTemplates = null;
 
 // Wait for DOM to be fully loaded before executing code
 document.addEventListener('DOMContentLoaded', async () => {
   // Initialize theme toggle
   initTheme();
 
+  // Load the modal functionality using traditional approaches
+  loadDependencies();
+
   setupLogout();
   setupSearch();
   setupTableViewInteractions();
   setupColumnViewInteractions();
   setupRefreshButton();
-  
+
   // Initialize database context menu
   initDatabaseContextMenu();
 
@@ -24,33 +29,477 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadDatabases();
 });
 
+// Load dependencies using script tags
+function loadDependencies() {
+  // Create and append modal.js script
+  const modalScript = document.createElement('script');
+  modalScript.src = '../utils/modal-global.js';
+  modalScript.onload = () => {
+    console.log('Modal manager loaded');
+    // Now the globalModalManager will be available
+    modalManager = window.globalModalManager;
+  };
+  document.head.appendChild(modalScript);
+
+  // Create and append modal-templates.js script
+  const templatesScript = document.createElement('script');
+  templatesScript.src = '../utils/modal-templates-global.js';
+  templatesScript.onload = () => {
+    console.log('Modal templates loaded');
+    // Now the global templates object will be available
+    modalTemplates = window.modalTemplates;
+  };
+  document.head.appendChild(templatesScript);
+
+  // Create and append database-operations.js script
+  const dbOperationsScript = document.createElement('script');
+  dbOperationsScript.src = '../services/database-operations.js';
+  dbOperationsScript.onload = () => {
+    console.log('Database operations service loaded');
+  };
+  document.head.appendChild(dbOperationsScript);
+}
+
+// Initialize the database context menu
+function initDatabaseContextMenu() {
+  // We need to create this as a global function now
+  window.handleContextMenu = function (contextMenu, target) {
+    const dbName = target.textContent || target.getAttribute('data-db-name');
+
+    // Configure menu items with simplified labels
+    const databaseMenuItems = [
+      {
+        label: 'Query',  // Changed from 'Connect' to 'Query'
+        icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M6 9a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 0 1h-3A.5.5 0 0 1 6 9z"/><path d="M4.5 5a.5.5 0 0 0-.5.5v5a.5.5 0 0 0 .5.5h7a.5.5 0 0 0 .5-.5v-5a.5.5 0 0 0-.5-.5h-7zm0-1h7A1.5 1.5 0 0 1 13 5.5v5a1.5 1.5 0 0 1-1.5 1.5h-7A1.5 1.5 0 0 1 3 10.5v-5A1.5 1.5 0 0 1 4.5 4z"/></svg>',
+        onClick: (target) => {
+          const dbName = target.textContent || target.getAttribute('data-db-name');
+          console.log(`Open SQL query interface for database: ${dbName}`);
+          showSqlQueryModal(dbName);
+        }
+      },
+      {
+        label: 'Clone',
+        icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/></svg>',
+        onClick: (target) => {
+          const dbName = target.textContent || target.getAttribute('data-db-name');
+          console.log(`Clone database: ${dbName}`);
+          showCloneModal(dbName);
+        }
+      },
+      {
+        label: 'Backup',
+        icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/><path d="M7.646 1.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 2.707V11.5a.5.5 0 0 1-1 0V2.707L5.354 4.854a.5.5 0 1 1-.708-.708l3-3z"/></svg>',
+        onClick: (target) => {
+          const dbName = target.textContent || target.getAttribute('data-db-name');
+          console.log(`Backup database: ${dbName}`);
+          showBackupModal(dbName);
+        }
+      },
+      {
+        label: 'Rename',
+        icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207 11.207 2.5zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293l6.5-6.5zm-9.761 5.175-.106.106-1.528 3.821 3.821-1.528.106-.106A.5.5 0 0 1 5 12.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.468-.325z"/></svg>',
+        onClick: (target) => {
+          const dbName = target.textContent || target.getAttribute('data-db-name');
+          console.log(`Rename database: ${dbName}`);
+          showRenameModal(dbName);
+        }
+      },
+      {
+        label: 'Delete',
+        icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>',
+        danger: true,
+        onClick: (target) => {
+          const dbName = target.textContent || target.getAttribute('data-db-name');
+          console.log(`Delete database: ${dbName}`);
+          showDeleteModal(dbName);
+        }
+      }
+    ];
+
+    contextMenu.setMenuItems(databaseMenuItems);
+  };
+
+  // We'll use a dynamic import to load our module but convert the result to global
+  const menuScript = document.createElement('script');
+  menuScript.src = '../components/Menu-global.js';
+  document.head.appendChild(menuScript);
+}
+
+// Global handler functions for modals
+window.showCloneModal = function (dbName) {
+  if (!window.globalModalManager || !window.modalTemplates) {
+    console.error('Modal components not loaded yet');
+    setTimeout(() => window.showCloneModal(dbName), 500);
+    return;
+  }
+
+  window.globalModalManager.showModal(window.modalTemplates.getCloneDatabaseTemplate(dbName), {
+    onSubmit: async (data) => {
+      // Handle form submission
+      console.log('Clone database form submitted:', data);
+
+      // Validate that the names are different
+      if (data.sourceDb === data.targetDb) {
+        alert('Source and target database names must be different.');
+        return;
+      }
+
+      // Check if the database already exists
+      const exists = allDatabases.some(db => db.name.toLowerCase() === data.targetDb.toLowerCase());
+      if (exists) {
+        alert(`A database with the name "${data.targetDb}" already exists.`);
+        return;
+      }
+
+      // Show loading indicator
+      const loadingElement = document.createElement('div');
+      loadingElement.className = 'modal-loading';
+      loadingElement.innerHTML = '<div class="spinner"></div><p>Cloning database...</p>';
+      document.body.appendChild(loadingElement);
+
+      try {
+        // Call the database operation service
+        if (window.dbOperations) {
+          const result = await window.dbOperations.cloneDatabase(
+            data.sourceDb,
+            data.targetDb,
+            data.withData === 'true'
+          );
+
+          // Remove loading indicator
+          document.body.removeChild(loadingElement);
+
+          if (result.success) {
+            alert(`Database "${data.sourceDb}" successfully cloned to "${data.targetDb}"`);
+
+            // Refresh the database list
+            await loadDatabases();
+          } else {
+            alert(`Failed to clone database: ${result.error}`);
+          }
+        } else {
+          // Fallback for backward compatibility
+          alert(`Clone functionality for "${data.sourceDb}" to "${data.targetDb}" with data=${data.withData} will be implemented in a future update.`);
+          document.body.removeChild(loadingElement);
+        }
+      } catch (error) {
+        // Remove loading indicator
+        if (document.body.contains(loadingElement)) {
+          document.body.removeChild(loadingElement);
+        }
+        alert(`Error: ${error.message || 'An unknown error occurred'}`);
+      }
+    }
+  });
+};
+
+window.showBackupModal = function (dbName) {
+  if (!window.globalModalManager || !window.modalTemplates) {
+    console.error('Modal components not loaded yet');
+    setTimeout(() => window.showBackupModal(dbName), 500);
+    return;
+  }
+
+  window.globalModalManager.showModal(window.modalTemplates.getBackupDatabaseTemplate(dbName), {
+    onSubmit: async (data) => {
+      console.log('Backup database form submitted:', data);
+
+      // Show loading indicator
+      const loadingElement = document.createElement('div');
+      loadingElement.className = 'modal-loading';
+      loadingElement.innerHTML = '<div class="spinner"></div><p>Backing up database...</p>';
+      document.body.appendChild(loadingElement);
+
+      try {
+        // Call the database operation service
+        if (window.dbOperations) {
+          const result = await window.dbOperations.backupDatabase(
+            data.database,
+            data.format,
+            data.compression
+          );
+
+          // Remove loading indicator
+          document.body.removeChild(loadingElement);
+
+          if (result.success) {
+            alert(`Database "${data.database}" successfully backed up`);
+          } else {
+            alert(`Failed to backup database: ${result.error}`);
+          }
+        } else {
+          // Fallback for backward compatibility
+          alert(`Backup functionality for "${data.database}" (format: ${data.format}, compression: ${data.compression}) will be implemented in a future update.`);
+          document.body.removeChild(loadingElement);
+        }
+      } catch (error) {
+        // Remove loading indicator
+        if (document.body.contains(loadingElement)) {
+          document.body.removeChild(loadingElement);
+        }
+        alert(`Error: ${error.message || 'An unknown error occurred'}`);
+      }
+    }
+  });
+};
+
+window.showRenameModal = function (dbName) {
+  if (!window.globalModalManager || !window.modalTemplates) {
+    console.error('Modal components not loaded yet');
+    setTimeout(() => window.showRenameModal(dbName), 500);
+    return;
+  }
+
+  window.globalModalManager.showModal(window.modalTemplates.getRenameDatabaseTemplate(dbName), {
+    onSubmit: async (data) => {
+      console.log('Rename database form submitted:', data);
+
+      if (!data.newName || data.newName.trim() === '') {
+        alert('New database name cannot be empty.');
+        return;
+      }
+
+      if (data.currentName === data.newName) {
+        alert('New name is the same as the current name.');
+        return;
+      }
+
+      const exists = allDatabases.some(db => db.name.toLowerCase() === data.newName.toLowerCase());
+      if (exists) {
+        alert(`A database with the name "${data.newName}" already exists.`);
+        return;
+      }
+
+      // Show loading indicator
+      const loadingElement = document.createElement('div');
+      loadingElement.className = 'modal-loading';
+      loadingElement.innerHTML = '<div class="spinner"></div><p>Renaming database...</p>';
+      document.body.appendChild(loadingElement);
+
+      try {
+        // Call the database operation service
+        if (window.dbOperations) {
+          const result = await window.dbOperations.renameDatabase(
+            data.currentName,
+            data.newName
+          );
+
+          // Remove loading indicator
+          document.body.removeChild(loadingElement);
+
+          if (result.success) {
+            alert(`Database "${data.currentName}" successfully renamed to "${data.newName}"`);
+
+            // Refresh the database list
+            await loadDatabases();
+          } else {
+            alert(`Failed to rename database: ${result.error}`);
+          }
+        } else {
+          // Fallback for backward compatibility
+          alert(`Rename functionality for "${data.currentName}" to "${data.newName}" will be implemented in a future update.`);
+          document.body.removeChild(loadingElement);
+        }
+      } catch (error) {
+        // Remove loading indicator
+        if (document.body.contains(loadingElement)) {
+          document.body.removeChild(loadingElement);
+        }
+        alert(`Error: ${error.message || 'An unknown error occurred'}`);
+      }
+    }
+  });
+};
+
+window.showDeleteModal = function (dbName) {
+  if (!window.globalModalManager || !window.modalTemplates) {
+    console.error('Modal components not loaded yet');
+    setTimeout(() => window.showDeleteModal(dbName), 500);
+    return;
+  }
+
+  window.globalModalManager.showModal(window.modalTemplates.getDeleteDatabaseTemplate(dbName), {
+    onSubmit: async (data) => {
+      console.log('Delete database form submitted:', data);
+
+      if (data.confirmName !== dbName) {
+        alert('The database name you entered does not match the database you are trying to delete.');
+        return;
+      }
+
+      // Show loading indicator
+      const loadingElement = document.createElement('div');
+      loadingElement.className = 'modal-loading';
+      loadingElement.innerHTML = '<div class="spinner"></div><p>Deleting database...</p>';
+      document.body.appendChild(loadingElement);
+
+      try {
+        // Call the database operation service
+        if (window.dbOperations) {
+          const result = await window.dbOperations.deleteDatabase(dbName);
+
+          // Remove loading indicator
+          document.body.removeChild(loadingElement);
+
+          if (result.success) {
+            alert(`Database "${dbName}" successfully deleted`);
+
+            // Refresh the database list
+            await loadDatabases();
+          } else {
+            alert(`Failed to delete database: ${result.error}`);
+          }
+        } else {
+          // Fallback for backward compatibility
+          alert(`Delete functionality for "${dbName}" will be implemented in a future update.`);
+          document.body.removeChild(loadingElement);
+        }
+      } catch (error) {
+        // Remove loading indicator
+        if (document.body.contains(loadingElement)) {
+          document.body.removeChild(loadingElement);
+        }
+        alert(`Error: ${error.message || 'An unknown error occurred'}`);
+      }
+    }
+  });
+};
+
+// Show SQL query modal for executing SQL on selected database
+window.showSqlQueryModal = function (dbName) {
+  if (!window.globalModalManager || !window.modalTemplates) {
+    console.error('Modal components not loaded yet');
+    setTimeout(() => window.showSqlQueryModal(dbName), 500);
+    return;
+  }
+
+  window.globalModalManager.showModal(window.modalTemplates.getSqlQueryTemplate(dbName), {
+    width: '800px', // Wider modal for query editor
+    closeOnSubmit: false // Keep modal open after submitting
+  });
+
+  // Once the modal is shown, set up the SQL execution
+  setTimeout(() => {
+    const executeBtn = document.getElementById('execute-query-btn');
+    const queryInput = document.getElementById('sql-query');
+    const resultsContainer = document.getElementById('query-results');
+    const resultsCount = document.getElementById('query-results-count');
+
+    if (!executeBtn || !queryInput || !resultsContainer) {
+      console.error('SQL query modal elements not found');
+      return;
+    }
+
+    // Execute query when button is clicked
+    executeBtn.addEventListener('click', async () => {
+      const query = queryInput.value.trim();
+
+      if (!query) {
+        resultsContainer.innerHTML = '<div class="query-error">Please enter a SQL query</div>';
+        return;
+      }
+
+      // Show loading indicator
+      resultsContainer.innerHTML = '<div class="query-loading">Executing query...</div>';
+
+      try {
+        // Call the database operation service
+        if (window.dbOperations) {
+          const result = await window.dbOperations.executeQuery(dbName, query);
+
+          if (result.success) {
+            // Display results
+            if (result.rows && result.rows.length > 0) {
+              // Create a table for the results
+              const table = document.createElement('table');
+              table.className = 'query-results-table';
+
+              // Create header row
+              const thead = document.createElement('thead');
+              const headerRow = document.createElement('tr');
+
+              result.columns.forEach(column => {
+                const th = document.createElement('th');
+                th.textContent = column;
+                headerRow.appendChild(th);
+              });
+
+              thead.appendChild(headerRow);
+              table.appendChild(thead);
+
+              // Create body rows
+              const tbody = document.createElement('tbody');
+
+              result.rows.forEach(row => {
+                const tr = document.createElement('tr');
+
+                result.columns.forEach(column => {
+                  const td = document.createElement('td');
+                  td.textContent = row[column] !== undefined ? row[column] : '';
+                  tr.appendChild(td);
+                });
+
+                tbody.appendChild(tr);
+              });
+
+              table.appendChild(tbody);
+
+              // Update results container
+              resultsContainer.innerHTML = '';
+              resultsContainer.appendChild(table);
+
+              // Update count
+              resultsCount.textContent = `${result.rows.length} row${result.rows.length !== 1 ? 's' : ''} returned`;
+            } else {
+              resultsContainer.innerHTML = '<div class="query-success">Query executed successfully. No rows returned.</div>';
+              resultsCount.textContent = '';
+            }
+          } else {
+            resultsContainer.innerHTML = `<div class="query-error">Error: ${result.error}</div>`;
+            resultsCount.textContent = '';
+          }
+        } else {
+          // Fallback for backward compatibility
+          resultsContainer.innerHTML = '<div class="query-error">SQL execution functionality not available</div>';
+          resultsCount.textContent = '';
+        }
+      } catch (error) {
+        resultsContainer.innerHTML = `<div class="query-error">Error: ${error.message || 'An unknown error occurred'}</div>`;
+        resultsCount.textContent = '';
+      }
+    });
+
+    // Focus the query input
+    queryInput.focus();
+  }, 100);
+};
 // Set up the refresh button
 function setupRefreshButton() {
   const refreshBtn = document.getElementById('refresh-databases-btn');
-  
+
   if (refreshBtn) {
     refreshBtn.addEventListener('click', async () => {
       // Prevent multiple refreshes at once
       if (isRefreshing) return;
-      
+
       try {
         // Update button state
         isRefreshing = true;
         refreshBtn.classList.add('refreshing');
-        
+
         // Clear search
         const searchInput = document.getElementById('database-search');
         if (searchInput) {
           searchInput.value = '';
         }
-        
+
         // Reload databases
         await loadDatabases();
-        
+
         console.log('Databases refreshed successfully');
       } catch (error) {
         console.error('Error refreshing databases:', error);
-        
+
         // Show error in database list
         const databaseList = document.getElementById('database-list');
         if (databaseList) {
@@ -63,114 +512,6 @@ function setupRefreshButton() {
       }
     });
   }
-}
-
-// Initialize the database context menu
-function initDatabaseContextMenu() {
-  // We'll use a dynamic import to load our module
-  import('../components/Menu.js').then(module => {
-    const contextMenu = module.default;
-    
-    // Configure menu items with simplified labels
-    const databaseMenuItems = [
-      {
-        label: 'Connect',
-        icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M6 9a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 0 1h-3A.5.5 0 0 1 6 9z"/><path d="M4.5 5a.5.5 0 0 0-.5.5v5a.5.5 0 0 0 .5.5h7a.5.5 0 0 0 .5-.5v-5a.5.5 0 0 0-.5-.5h-7zm0-1h7A1.5 1.5 0 0 1 13 5.5v5a1.5 1.5 0 0 1-1.5 1.5h-7A1.5 1.5 0 0 1 3 10.5v-5A1.5 1.5 0 0 1 4.5 4z"/></svg>',
-        onClick: (target) => {
-          const dbName = target.textContent || target.getAttribute('data-db-name');
-          console.log(`Connect to database: ${dbName}`);
-          loadTables(dbName);
-        }
-      },
-      {
-        label: 'Clone',
-        icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/></svg>',
-        onClick: (target) => {
-          const dbName = target.textContent || target.getAttribute('data-db-name');
-          console.log(`Clone database: ${dbName}`);
-          
-          // Get new name for the cloned database
-          const newName = prompt(`Enter a name for the clone of "${dbName}":`, `${dbName}_clone`);
-          
-          if (newName) {
-            // Check if the name is valid
-            if (newName.trim() === '') {
-              alert('Database name cannot be empty.');
-              return;
-            }
-            
-            // Check if the database already exists (simplified check, in real app would check against backend)
-            const exists = allDatabases.some(db => db.name.toLowerCase() === newName.toLowerCase());
-            if (exists) {
-              alert(`A database with the name "${newName}" already exists.`);
-              return;
-            }
-            
-            alert(`Clone functionality for "${dbName}" to "${newName}" will be implemented in a future update.`);
-          }
-        }
-      },
-      {
-        label: 'Backup',
-        icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/><path d="M7.646 1.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 2.707V11.5a.5.5 0 0 1-1 0V2.707L5.354 4.854a.5.5 0 1 1-.708-.708l3-3z"/></svg>',
-        onClick: (target) => {
-          const dbName = target.textContent || target.getAttribute('data-db-name');
-          console.log(`Backup database: ${dbName}`);
-          alert(`Backup functionality for "${dbName}" will be implemented in a future update.`);
-        }
-      },
-      {
-        label: 'Rename',
-        icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207 11.207 2.5zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293l6.5-6.5zm-9.761 5.175-.106.106-1.528 3.821 3.821-1.528.106-.106A.5.5 0 0 1 5 12.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.468-.325z"/></svg>',
-        onClick: (target) => {
-          const dbName = target.textContent || target.getAttribute('data-db-name');
-          console.log(`Rename database: ${dbName}`);
-          
-          // Get new name for the database
-          const newName = prompt(`Enter a new name for database "${dbName}":`, dbName);
-          
-          if (newName) {
-            // Check if the name is valid
-            if (newName.trim() === '') {
-              alert('Database name cannot be empty.');
-              return;
-            }
-            
-            // Check if the name is unchanged
-            if (newName === dbName) {
-              return; // No change needed
-            }
-            
-            // Check if the database already exists (simplified check, in real app would check against backend)
-            const exists = allDatabases.some(db => db.name.toLowerCase() === newName.toLowerCase());
-            if (exists) {
-              alert(`A database with the name "${newName}" already exists.`);
-              return;
-            }
-            
-            alert(`Rename functionality for "${dbName}" to "${newName}" will be implemented in a future update.`);
-          }
-        }
-      },
-      {
-        label: 'Delete',
-        icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>',
-        danger: true,
-        onClick: (target) => {
-          const dbName = target.textContent || target.getAttribute('data-db-name');
-          console.log(`Delete database: ${dbName}`);
-          
-          if (confirm(`Are you sure you want to delete the database "${dbName}"? This action cannot be undone.`)) {
-            alert(`Delete functionality for "${dbName}" will be implemented in a future update.`);
-          }
-        }
-      }
-    ];
-    
-    contextMenu.setMenuItems(databaseMenuItems);
-  }).catch(error => {
-    console.error('Error loading context menu module:', error);
-  });
 }
 
 // Set up logout button
@@ -317,7 +658,7 @@ async function loadDatabases() {
 
     // Render the list
     renderDatabaseList(databases);
-    
+
     // If a database was previously selected, try to restore that selection
     if (currentDb) {
       // Find the database in the list
@@ -375,26 +716,28 @@ function renderDatabaseList(databases) {
       // Load tables for selected database
       loadTables(db.name);
     });
-    
+
     // Add context menu handler
     li.addEventListener('contextmenu', async (e) => {
       e.preventDefault(); // Prevent default context menu
-      
+
       // Add active class to right-clicked item
       document.querySelectorAll('#database-list .list-item').forEach(item => {
         item.classList.remove('active');
       });
       li.classList.add('active');
-      
-      // Load the context menu module on demand
-      try {
-        const module = await import('../components/Menu.js');
-        const contextMenu = module.default;
-        
+
+      // Use the global context menu
+      if (window.contextMenu) {
+        // Call the global handler function
+        if (window.handleContextMenu) {
+          window.handleContextMenu(window.contextMenu, li);
+        }
+
         // Show context menu at cursor position
-        contextMenu.show(e.pageX, e.pageY, li);
-      } catch (error) {
-        console.error('Error showing context menu:', error);
+        window.contextMenu.show(e.pageX, e.pageY, li);
+      } else {
+        console.error('Context menu not loaded yet');
       }
     });
 
@@ -414,7 +757,7 @@ function filterDatabases(searchTerm) {
   );
 
   renderDatabaseList(filtered);
-  
+
   // If the current database is still in the filtered list, highlight it
   if (currentDb) {
     const dbItem = document.querySelector(`#database-list .list-item[data-db-name="${currentDb}"]`);
@@ -876,3 +1219,6 @@ function showColumnsView() {
   if (tablesView) tablesView.style.display = 'none';
   if (columnsView) columnsView.style.display = 'block';
 }
+
+// Make loadColumns function available globally for HTML onclick handlers
+window.loadColumns = loadColumns;

@@ -198,5 +198,5 @@ class ContextMenu {
   // Create a singleton instance
   const contextMenu = new ContextMenu();
   
-  // Export the instance
-  export default contextMenu;
+  // Make it globally available
+  window.contextMenu = contextMenu;
