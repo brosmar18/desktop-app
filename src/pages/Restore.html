@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline';">
+    <title>PostgreSQL Explorer - Restore Database</title>
+    <link rel="stylesheet" href="../styles/main.css">
+    <link rel="stylesheet" href="../styles/home.css">
+    <link rel="stylesheet" href="../styles/restore.css">
+</head>
+
+<body class="dark-mode">
+    <div class="dashboard-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <h2 class="sidebar-title">PostgreSQL Explorer</h2>
+            <nav class="sidebar-nav">
+                <a href="../pages/Home.html" class="sidebar-link">Dashboard</a>
+                <a href="../pages/Databases.html" class="sidebar-link">Databases</a>
+                <a href="../pages/Restore.html" class="sidebar-link active">Restore</a>
+                <a href="#" class="sidebar-link">Queries</a>
+                <a href="#" class="sidebar-link">Settings</a>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Header -->
+            <header class="header">
+                <h1 class="header-title">Restore Database</h1>
+                <div class="header-actions">
+                    <div class="theme-toggle-container">
+                        <button id="theme-toggle-btn" class="theme-toggle-btn">☀️</button>
+                    </div>
+                    <div class="logout-container">
+                        <button id="logout-btn" class="logout-button">Logout</button>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Content -->
+            <main class="content">
+                <div class="restore-container">
+                    <!-- Create Database Section -->
+                    <div class="card">
+                        <h2 class="card-title">Create New Database</h2>
+                        <form id="create-db-form" class="restore-form">
+                            <div class="form-group">
+                                <label for="db-name">Database Name</label>
+                                <input type="text" id="db-name" placeholder="Enter database name" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="owner">Owner (optional)</label>
+                                <input type="text" id="owner" placeholder="Leave blank for current user">
+                            </div>
+                            <div class="form-group">
+                                <label for="encoding">Encoding (optional)</label>
+                                <select id="encoding">
+                                    <option value="UTF8">UTF8 (default)</option>
+                                    <option value="SQL_ASCII">SQL_ASCII</option>
+                                    <option value="LATIN1">LATIN1</option>
+                                    <option value="LATIN2">LATIN2</option>
+                                    <option value="LATIN3">LATIN3</option>
+                                    <option value="LATIN4">LATIN4</option>
+                                    <option value="ISO_8859_5">ISO_8859_5</option>
+                                    <option value="ISO_8859_6">ISO_8859_6</option>
+                                    <option value="ISO_8859_7">ISO_8859_7</option>
+                                    <option value="ISO_8859_8">ISO_8859_8</option>
+                                    <option value="ISO_8859_9">ISO_8859_9</option>
+                                    <option value="ISO_8859_13">ISO_8859_13</option>
+                                    <option value="ISO_8859_15">ISO_8859_15</option>
+                                    <option value="KOI8R">KOI8R</option>
+                                    <option value="KOI8U">KOI8U</option>
+                                    <option value="WIN866">WIN866</option>
+                                    <option value="WIN874">WIN874</option>
+                                    <option value="WIN1250">WIN1250</option>
+                                    <option value="WIN1251">WIN1251</option>
+                                    <option value="WIN1252">WIN1252</option>
+                                    <option value="WIN1253">WIN1253</option>
+                                    <option value="WIN1254">WIN1254</option>
+                                    <option value="WIN1255">WIN1255</option>
+                                    <option value="WIN1256">WIN1256</option>
+                                    <option value="WIN1257">WIN1257</option>
+                                    <option value="WIN1258">WIN1258</option>
+                                    <option value="EUC_CN">EUC_CN</option>
+                                    <option value="EUC_JP">EUC_JP</option>
+                                    <option value="EUC_KR">EUC_KR</option>
+                                    <option value="EUC_TW">EUC_TW</option>
+                                    <option value="GB18030">GB18030</option>
+                                    <option value="GBK">GBK</option>
+                                    <option value="SJIS">SJIS</option>
+                                    <option value="BIG5">BIG5</option>
+                                </select>
+                            </div>
+                            <div class="form-options">
+                                <div class="checkbox-group">
+                                    <input type="checkbox" id="template-db">
+                                    <label for="template-db">Use template database</label>
+                                </div>
+                            </div>
+                            <div class="form-group template-db-selection" style="display: none;">
+                                <label for="template-select">Select Template</label>
+                                <select id="template-select">
+                                    <option value="template0">template0</option>
+                                    <option value="template1">template1</option>
+                                </select>
+                            </div>
+                            <button type="submit" class="create-button">Create Database</button>
+                        </form>
+                        <div id="create-db-error" class="create-error"></div>
+                        <div id="create-db-success" class="create-success"></div>
+                    </div>
+
+                    <!-- Restore Backup Section -->
+                    <div class="card">
+                        <h2 class="card-title">Restore from Backup</h2>
+                        <form id="restore-form" class="restore-form">
+                            <div class="form-group">
+                                <label for="target-db">Target Database</label>
+                                <select id="target-db" required>
+                                    <option value="">Select a database</option>
+                                </select>
+                                <button type="button" id="refresh-db-list" class="refresh-button">
+                                    <span class="refresh-icon">↻</span>
+                                </button>
+                            </div>
+                            <div class="form-group">
+                                <label for="backup-file">Backup File (.backup)</label>
+                                <div class="file-input-container">
+                                    <input type="text" id="backup-file-path" readonly placeholder="No file selected">
+                                    <button type="button" id="select-file" class="file-button">Browse</button>
+                                </div>
+                            </div>
+                            <div class="form-options">
+                                <div class="checkbox-group">
+                                    <input type="checkbox" id="clean" checked>
+                                    <label for="clean">Clean before restore</label>
+                                </div>
+                                <div class="checkbox-group">
+                                    <input type="checkbox" id="single-transaction">
+                                    <label for="single-transaction">Single transaction</label>
+                                </div>
+                            </div>
+                            <button type="submit" class="restore-button" disabled>Restore Database</button>
+                        </form>
+                        <div id="restore-error" class="restore-error"></div>
+                        <div id="restore-progress-container" class="progress-container" style="display: none;">
+                            <div class="progress-label">Restoring database...</div>
+                            <div class="progress-bar-container">
+                                <div id="restore-progress-bar" class="progress-bar"></div>
+                            </div>
+                            <div id="restore-status" class="restore-status"></div>
+                        </div>
+                        <div id="restore-success" class="restore-success"></div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Include utility scripts first -->
+    <script src="../utils/theme.js"></script>
+    <script src="../utils/database-api.js"></script>
+    <script src="../utils/ui-utils.js"></script>
+    
+    <!-- Include page-specific script -->
+    <script src="../js/restore.js"></script>
+</body>
+
+</html>

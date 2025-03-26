@@ -84,6 +84,34 @@ function connectToDatabase(credentials) {
     }
   }
   
+  // Create a new database
+  async function createDatabase(options) {
+    if (!window.api) {
+      throw new Error('API not available');
+    }
+    
+    try {
+      return await window.api.createDatabase(options);
+    } catch (error) {
+      console.error(`Error creating database ${options.name}:`, error);
+      throw error;
+    }
+  }
+  
+  // Restore database from backup
+  async function restoreDatabase(options) {
+    if (!window.api) {
+      throw new Error('API not available');
+    }
+    
+    try {
+      return await window.api.restoreDatabase(options);
+    } catch (error) {
+      console.error(`Error restoring database ${options.database}:`, error);
+      throw error;
+    }
+  }
+  
   // Logout from the application
   function logout() {
     return new Promise((resolve, reject) => {

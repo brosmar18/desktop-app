@@ -143,6 +143,7 @@ function filterDatabases(searchTerm) {
 }
 
 // Load tables for a selected database
+// Load tables for a selected database
 async function loadTables(dbName) {
   try {
     currentDb = dbName;
@@ -168,17 +169,25 @@ async function loadTables(dbName) {
     
     console.log('Loading tables for database:', dbName);
     
-    // Call API to get tables
-    const tables = await getTables(dbName);
-    console.log('Tables loaded:', tables);
-    
-    // Render tables
-    renderTablesList(tables);
+    try {
+      // Call API to get tables
+      const tables = await getTables(dbName);
+      console.log('Tables loaded:', tables);
+      
+      // Render tables
+      renderTablesList(tables);
+    } catch (error) {
+      console.error(`Error fetching tables for ${dbName}:`, error);
+      tablesList.innerHTML = `<li class="error">Error loading tables: ${error.message}</li>`;
+      
+      // Additional debugging
+      console.log('Current connection info:', await getConnectionInfo());
+    }
   } catch (error) {
-    console.error(`Error loading tables for ${dbName}:`, error);
+    console.error(`Error in loadTables for ${dbName}:`, error);
     const tablesList = document.getElementById('tables-list');
     if (tablesList) {
-      tablesList.innerHTML = `<li class="error">Error loading tables: ${error.message}</li>`;
+      tablesList.innerHTML = `<li class="error">Error: ${error.message}</li>`;
     }
   }
 }
