@@ -63,6 +63,12 @@ contextBridge.exposeInMainWorld(
     // Restore database from backup
     restoreDatabase: async (options) => {
       return await ipcRenderer.invoke('restoreDatabase', options);
+    },
+    
+    // Clone database (new method)
+    cloneDatabase: async (options) => {
+      console.log('preload.js cloneDatabase called with:', options);
+      return await ipcRenderer.invoke('cloneDatabase', options);
     }
   }
 );

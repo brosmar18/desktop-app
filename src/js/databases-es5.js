@@ -1,3 +1,7 @@
+// Debug logging at file load time
+console.log('Databases-es5.js loaded');
+console.log('dbOperations available at load time:', !!window.dbOperations);
+// Rest of your code...
 // Global variables to track state and modules
 let currentDb = null;
 let currentTable = null;
@@ -10,6 +14,8 @@ let modalTemplates = null;
 
 // Wait for DOM to be fully loaded before executing code
 document.addEventListener('DOMContentLoaded', async () => {
+  console.log('DOM fully loaded');
+  console.log('dbOperations available after DOM load:', !!window.dbOperations);
   // Initialize theme toggle
   initTheme();
 
@@ -125,12 +131,21 @@ function initDatabaseContextMenu() {
   document.head.appendChild(menuScript);
 }
 
-// Global handler functions for modals
+// clone 
 window.showCloneModal = function (dbName) {
+  console.log('showCloneModal called for:', dbName);
+  console.log('dbOperations available when modal shown:', !!window.dbOperations);
+
+  
   if (!window.globalModalManager || !window.modalTemplates) {
     console.error('Modal components not loaded yet');
     setTimeout(() => window.showCloneModal(dbName), 500);
     return;
+  }
+
+  console.log('Database operations service available:', !!window.dbOperations);
+  if (window.dbOperations) {
+    console.log('Clone function available:', !!window.dbOperations.cloneDatabase);
   }
 
   window.globalModalManager.showModal(window.modalTemplates.getCloneDatabaseTemplate(dbName), {
@@ -151,38 +166,73 @@ window.showCloneModal = function (dbName) {
         return;
       }
 
-      // Show loading indicator
+      // Show loading indicator with progress information
       const loadingElement = document.createElement('div');
       loadingElement.className = 'modal-loading';
-      loadingElement.innerHTML = '<div class="spinner"></div><p>Cloning database...</p>';
+      loadingElement.innerHTML = `
+        <div class="spinner"></div>
+        <p id="clone-status">Initializing database clone...</p>
+      `;
       document.body.appendChild(loadingElement);
 
       try {
-        // Call the database operation service
-        if (window.dbOperations) {
-          const result = await window.dbOperations.cloneDatabase(
-            data.sourceDb,
-            data.targetDb,
-            data.withData === 'true'
-          );
-
-          // Remove loading indicator
+        // Check if dbOperations is available
+        if (!window.dbOperations) {
+          console.error('Database operations service not available');
+          alert('Database operations service not available. Please refresh the page and try again.');
           document.body.removeChild(loadingElement);
+          return;
+        }
 
-          if (result.success) {
-            alert(`Database "${data.sourceDb}" successfully cloned to "${data.targetDb}"`);
+        if (!window.dbOperations.cloneDatabase) {
+          console.error('Clone function not available in database operations service');
+          alert('Clone function not available. Please refresh the page and try again.');
+          document.body.removeChild(loadingElement);
+          return;
+        }
 
-            // Refresh the database list
-            await loadDatabases();
-          } else {
-            alert(`Failed to clone database: ${result.error}`);
+        const cloneStatus = document.getElementById('clone-status');
+        
+        // Update status periodically to keep the user informed
+        const statusUpdates = [
+          'Creating target database...',
+          'Preparing to copy database structure...',
+          data.withData === 'true' ? 'Copying data (this may take a while)...' : 'Transferring schema without data...',
+          'Finalizing database clone...'
+        ];
+        
+        let updateIndex = 0;
+        const statusInterval = setInterval(() => {
+          if (updateIndex < statusUpdates.length) {
+            cloneStatus.textContent = statusUpdates[updateIndex++];
           }
+        }, 2000);
+
+        // Call the database operation service
+        console.log('Calling cloneDatabase with:', data.sourceDb, data.targetDb, data.withData === 'true');
+        const result = await window.dbOperations.cloneDatabase(
+          data.sourceDb,
+          data.targetDb,
+          data.withData === 'true'
+        );
+        console.log('Clone result:', result);
+
+        // Clear the status interval
+        clearInterval(statusInterval);
+        
+        // Remove loading indicator
+        document.body.removeChild(loadingElement);
+
+        if (result.success) {
+          alert(`Database "${data.sourceDb}" successfully cloned to "${data.targetDb}"`);
+
+          // Refresh the database list
+          await loadDatabases();
         } else {
-          // Fallback for backward compatibility
-          alert(`Clone functionality for "${data.sourceDb}" to "${data.targetDb}" with data=${data.withData} will be implemented in a future update.`);
-          document.body.removeChild(loadingElement);
+          alert(`Failed to clone database: ${result.error}`);
         }
       } catch (error) {
+        console.error('Error in cloneDatabase operation:', error);
         // Remove loading indicator
         if (document.body.contains(loadingElement)) {
           document.body.removeChild(loadingElement);
@@ -191,6 +241,22 @@ window.showCloneModal = function (dbName) {
       }
     }
   });
+  
+  // Add suggestion button handlers
+  setTimeout(() => {
+    const buttons = document.querySelectorAll('.suggestion-btn');
+    console.log('Found suggestion buttons:', buttons.length);
+    
+    buttons.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault(); // Stop button from submitting the form
+        const targetInput = document.getElementById('target-db');
+        const suggestedName = btn.getAttribute('data-name');
+        console.log('Setting suggested name:', suggestedName);
+        targetInput.value = suggestedName;
+      });
+    });
+  }, 100);
 };
 
 window.showBackupModal = function (dbName) {

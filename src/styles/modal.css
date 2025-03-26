@@ -366,3 +366,37 @@
 .light-mode .query-results-table tr:hover td {
   background-color: rgba(0, 0, 0, 0.01);
 }
+
+/* Name suggestion buttons for database cloning */
+.name-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.suggestion-btn {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  background-color: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 4px;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.suggestion-btn:hover {
+  background-color: var(--primary);
+  color: var(--background);
+}
+
+/* Light mode override */
+.light-mode .suggestion-btn {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.light-mode .suggestion-btn:hover {
+  background-color: var(--primary);
+  color: white;
+}

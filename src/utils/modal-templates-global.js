@@ -9,7 +9,11 @@ window.modalTemplates = {
    * @param {string} dbName - Original database name
    * @returns {string} HTML template for clone database modal
    */
-  getCloneDatabaseTemplate: function(dbName) {
+
+  getCloneDatabaseTemplate: function (dbName) {
+    const currentDate = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const suggestedName = `${dbName}_clone_${currentDate}`;
+
     return `
       <div class="modal-header">
         <h3 class="modal-title">Clone Database</h3>
@@ -23,7 +27,13 @@ window.modalTemplates = {
           </div>
           <div class="modal-form-group">
             <label for="target-db">New Database Name</label>
-            <input type="text" id="target-db" name="targetDb" value="${dbName}_clone" required />
+            <input type="text" id="target-db" name="targetDb" value="${suggestedName}" required />
+            <div class="name-suggestions">
+              <button type="button" class="suggestion-btn" data-name="${dbName}_clone" onclick="document.getElementById('target-db').value=this.getAttribute('data-name')">Basic Clone</button>
+              <button type="button" class="suggestion-btn" data-name="${dbName}_dev" onclick="document.getElementById('target-db').value=this.getAttribute('data-name')">Dev</button>
+              <button type="button" class="suggestion-btn" data-name="${dbName}_test" onclick="document.getElementById('target-db').value=this.getAttribute('data-name')">Test</button>
+              <button type="button" class="suggestion-btn" data-name="${suggestedName}" onclick="document.getElementById('target-db').value=this.getAttribute('data-name')">Dated</button>
+            </div>
           </div>
           <div class="modal-form-group">
             <label for="clone-with-data">Include Data</label>
@@ -31,6 +41,9 @@ window.modalTemplates = {
               <option value="true" selected>Yes - Clone schema and data</option>
               <option value="false">No - Clone schema only</option>
             </select>
+          </div>
+          <div class="modal-note">
+            <p><strong>Note:</strong> Creating a clone with data can take some time for larger databases.</p>
           </div>
         </div>
         <div class="modal-footer">
@@ -40,13 +53,12 @@ window.modalTemplates = {
       </form>
     `;
   },
-  
   /**
    * Get modal template for backing up a database
    * @param {string} dbName - Database name
    * @returns {string} HTML template for backup database modal
    */
-  getBackupDatabaseTemplate: function(dbName) {
+  getBackupDatabaseTemplate: function (dbName) {
     return `
       <div class="modal-header">
         <h3 class="modal-title">Backup Database</h3>
@@ -84,13 +96,13 @@ window.modalTemplates = {
       </form>
     `;
   },
-  
+
   /**
    * Get modal template for renaming a database
    * @param {string} dbName - Current database name
    * @returns {string} HTML template for rename database modal
    */
-  getRenameDatabaseTemplate: function(dbName) {
+  getRenameDatabaseTemplate: function (dbName) {
     return `
       <div class="modal-header">
         <h3 class="modal-title">Rename Database</h3>
@@ -118,13 +130,13 @@ window.modalTemplates = {
       </form>
     `;
   },
-  
+
   /**
    * Get modal template for deleting a database
    * @param {string} dbName - Database name to delete
    * @returns {string} HTML template for delete database modal
    */
-  getDeleteDatabaseTemplate: function(dbName) {
+  getDeleteDatabaseTemplate: function (dbName) {
     return `
       <div class="modal-header">
         <h3 class="modal-title">Delete Database</h3>
@@ -148,13 +160,13 @@ window.modalTemplates = {
       </form>
     `;
   },
-  
+
   /**
    * Get modal template for SQL query execution
    * @param {string} dbName - Database name
    * @returns {string} HTML template for SQL query modal
    */
-  getSqlQueryTemplate: function(dbName) {
+  getSqlQueryTemplate: function (dbName) {
     return `
       <div class="modal-header">
         <h3 class="modal-title">Execute SQL Query on "${dbName}"</h3>
