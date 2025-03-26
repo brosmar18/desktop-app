@@ -206,64 +206,77 @@ function setupIpcHandlers() {
   // In main.js - Update the getTables function
 
   // Get tables for a database
-  ipcMain.handle('getTables', async (event, dbName) => {
-    try {
-      if (!pgClient) {
-        // Connection is missing - try to reconnect using stored credentials
-        if (global.connectionInfo) {
-          console.log('Reconnecting with stored credentials for user:', global.connectionInfo.user);
+  // Get tables for a database
+ipcMain.handle('getTables', async (event, dbName) => {
+  try {
+    if (!pgClient) {
+      // Connection is missing - try to reconnect using stored credentials
+      if (global.connectionInfo) {
+        console.log('Reconnecting with stored credentials for user:', global.connectionInfo.user);
 
-          // Create a new connection to PostgreSQL using stored credentials
-          pgClient = new Client({
-            host: global.connectionInfo.host,
-            port: global.connectionInfo.port,
-            user: global.connectionInfo.user,
-            password: global.connectionInfo.password, // This should be stored securely
-            database: 'postgres' // Connect to default postgres database first
-          });
+        // Create a new connection to PostgreSQL using stored credentials
+        pgClient = new Client({
+          host: global.connectionInfo.host,
+          port: global.connectionInfo.port,
+          user: global.connectionInfo.user,
+          password: global.connectionInfo.password, // This should be stored securely
+          database: 'postgres' // Connect to default postgres database first
+        });
 
-          await pgClient.connect();
-        } else {
-          throw new Error('Not connected to PostgreSQL and no stored credentials');
-        }
+        await pgClient.connect();
+      } else {
+        throw new Error('Not connected to PostgreSQL and no stored credentials');
       }
+    }
 
-      // Close the existing connection
-      await pgClient.end();
+    // Close the existing connection
+    await pgClient.end();
 
-      // Create a new connection to the selected database
-      pgClient = new Client({
-        host: global.connectionInfo.host,
-        port: global.connectionInfo.port,
-        user: global.connectionInfo.user,
-        password: global.connectionInfo.password,
-        database: dbName // Connect directly to the selected database
-      });
+    // Create a new connection to the selected database
+    pgClient = new Client({
+      host: global.connectionInfo.host,
+      port: global.connectionInfo.port,
+      user: global.connectionInfo.user,
+      password: global.connectionInfo.password,
+      database: dbName // Connect directly to the selected database
+    });
 
-      // Connect to the database
-      await pgClient.connect();
-      console.log(`Connected to database: ${dbName}`);
+    // Connect to the database
+    await pgClient.connect();
+    console.log(`Connected to database: ${dbName}`);
 
-      // Update the global connection info
-      global.connectionInfo.database = dbName;
-      global.connectionInfo.currentDb = dbName;
+    // Update the global connection info
+    global.connectionInfo.database = dbName;
+    global.connectionInfo.currentDb = dbName;
 
-      // Now query for tables in this database
-      const query = `
-      SELECT table_name AS name
-      FROM information_schema.tables
-      WHERE table_schema = 'public'
-      ORDER BY table_name
+    // Modified query to include column counts for each table
+    const query = `
+      SELECT 
+        t.table_name AS name,
+        COUNT(c.column_name) AS column_count
+      FROM 
+        information_schema.tables t
+      LEFT JOIN 
+        information_schema.columns c 
+      ON 
+        t.table_name = c.table_name AND 
+        t.table_schema = c.table_schema
+      WHERE 
+        t.table_schema = 'public'
+      GROUP BY 
+        t.table_name
+      ORDER BY 
+        t.table_name
     `;
 
-      const result = await pgClient.query(query);
-      console.log(`Found ${result.rows.length} tables in ${dbName}`);
-      return result.rows;
-    } catch (error) {
-      console.error(`Error fetching tables for ${dbName}:`, error);
-      throw error;
-    }
-  });
+    const result = await pgClient.query(query);
+    console.log(`Found ${result.rows.length} tables in ${dbName}`);
+    return result.rows;
+  } catch (error) {
+    console.error(`Error fetching tables for ${dbName}:`, error);
+    throw error;
+  }
+});
 
   // Clone database
   // Clone database

@@ -136,7 +136,7 @@ window.showCloneModal = function (dbName) {
   console.log('showCloneModal called for:', dbName);
   console.log('dbOperations available when modal shown:', !!window.dbOperations);
 
-  
+
   if (!window.globalModalManager || !window.modalTemplates) {
     console.error('Modal components not loaded yet');
     setTimeout(() => window.showCloneModal(dbName), 500);
@@ -192,7 +192,7 @@ window.showCloneModal = function (dbName) {
         }
 
         const cloneStatus = document.getElementById('clone-status');
-        
+
         // Update status periodically to keep the user informed
         const statusUpdates = [
           'Creating target database...',
@@ -200,7 +200,7 @@ window.showCloneModal = function (dbName) {
           data.withData === 'true' ? 'Copying data (this may take a while)...' : 'Transferring schema without data...',
           'Finalizing database clone...'
         ];
-        
+
         let updateIndex = 0;
         const statusInterval = setInterval(() => {
           if (updateIndex < statusUpdates.length) {
@@ -219,7 +219,7 @@ window.showCloneModal = function (dbName) {
 
         // Clear the status interval
         clearInterval(statusInterval);
-        
+
         // Remove loading indicator
         document.body.removeChild(loadingElement);
 
@@ -241,12 +241,12 @@ window.showCloneModal = function (dbName) {
       }
     }
   });
-  
+
   // Add suggestion button handlers
   setTimeout(() => {
     const buttons = document.querySelectorAll('.suggestion-btn');
     console.log('Found suggestion buttons:', buttons.length);
-    
+
     buttons.forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.preventDefault(); // Stop button from submitting the form
@@ -952,8 +952,9 @@ function renderGridView(tables) {
   let gridHTML = '';
 
   tables.forEach(table => {
-    // Generate random column count for demo purposes (in real app, you would get this from the database)
-    const columnCount = Math.floor(Math.random() * 20) + 1;
+    // Use the actual column count from the database 
+    // (fallback to 0 if not available for some reason)
+    const columnCount = table.column_count || 0;
 
     gridHTML += `
       <div class="table-card" data-table="${table.name}" onclick="loadColumns('${table.name}')">
@@ -1002,8 +1003,9 @@ function renderListView(tables) {
   let listHTML = '';
 
   tables.forEach(table => {
-    // Generate random column count for demo purposes
-    const columnCount = Math.floor(Math.random() * 20) + 1;
+    // Use the actual column count from the database
+    // (fallback to 0 if not available for some reason)
+    const columnCount = table.column_count || 0;
 
     listHTML += `
       <tr data-table="${table.name}">
