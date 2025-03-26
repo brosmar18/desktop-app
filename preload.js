@@ -67,6 +67,7 @@ contextBridge.exposeInMainWorld(
     
     // Clone database (new method)
     cloneDatabase: async (options) => {
+      console.log('preload.js cloneDatabase called with:', options);
       return await ipcRenderer.invoke('cloneDatabase', options);
     }
   }

@@ -4,6 +4,7 @@ const url = require('url');
 const { Client } = require('pg');
 const { spawn } = require('child_process');
 const fs = require('fs');
+const os = require('os');
 
 // Keep a global reference of the window object to prevent it from being garbage collected
 let mainWindow;
@@ -265,6 +266,7 @@ function setupIpcHandlers() {
   });
 
   // Clone database
+  // Clone database
   ipcMain.handle('cloneDatabase', async (event, options) => {
     try {
       if (!pgClient) {
@@ -297,20 +299,26 @@ function setupIpcHandlers() {
 
       // Clone schema and data if requested
       if (options.withData) {
-        // Create a new temporary connection to run pg_dump
+        // We need to use pg_dump and pg_restore for a full clone
+        const connInfo = global.connectionInfo;
+
+        // Create environment variables with password for pg_dump and pg_restore
         const env = { ...process.env };
-        if (global.connectionInfo && global.connectionInfo.password) {
-          env.PGPASSWORD = global.connectionInfo.password;
+        if (connInfo.password) {
+          env.PGPASSWORD = connInfo.password;
         }
 
-        // Determine paths based on operating system
+        // Create a temporary file for the dump
+        const tempDir = os.tmpdir();
+        const tempFile = path.join(tempDir, `pg_dump_${Date.now()}.custom`);
+
+        // Determine pg_dump and pg_restore commands based on OS
         let pgDumpBin = 'pg_dump';
         let pgRestoreBin = 'pg_restore';
 
         if (process.platform === 'win32') {
-          // Check common installation directories on Windows
+          // Try common Windows installation paths
           const possiblePaths = [
-            'C:\\Program Files\\PostgreSQL\\latest\\bin',
             'C:\\Program Files\\PostgreSQL\\14\\bin',
             'C:\\Program Files\\PostgreSQL\\13\\bin',
             'C:\\Program Files\\PostgreSQL\\12\\bin'
@@ -327,7 +335,7 @@ function setupIpcHandlers() {
             }
           }
         } else if (process.platform === 'darwin') {
-          // macOS paths
+          // Try common macOS paths
           const possiblePaths = [
             '/usr/local/bin',
             '/opt/homebrew/bin',
@@ -346,100 +354,194 @@ function setupIpcHandlers() {
           }
         }
 
-        // Create a temporary file for the dump
-        const tempDir = os.tmpdir();
-        const tempFile = path.join(tempDir, `pg_dump_${Date.now()}.custom`);
+        console.log(`Using pg_dump at: ${pgDumpBin}`);
+        console.log(`Using pg_restore at: ${pgRestoreBin}`);
 
-        // Build pg_dump command
+        // Build pg_dump command args
         const dumpArgs = [
-          '-h', global.connectionInfo.host,
-          '-p', global.connectionInfo.port.toString(),
-          '-U', global.connectionInfo.user,
-          '-F', 'c', // Custom format
-          '-f', tempFile,
+          `-h`, connInfo.host,
+          `-p`, connInfo.port.toString(),
+          `-U`, connInfo.user,
+          `-F`, `c`, // custom format
+          `-f`, tempFile,
           options.sourceDb
         ];
+
+        console.log('Running pg_dump command:', pgDumpBin, dumpArgs.join(' '));
 
         // Run pg_dump to create backup
         await new Promise((resolve, reject) => {
           const dumpProcess = spawn(pgDumpBin, dumpArgs, { env });
 
+          let stdoutData = '';
+          let stderrData = '';
+
+          dumpProcess.stdout.on('data', (data) => {
+            stdoutData += data.toString();
+            console.log(`pg_dump stdout: ${data}`);
+          });
+
           dumpProcess.stderr.on('data', (data) => {
+            stderrData += data.toString();
             console.log(`pg_dump stderr: ${data}`);
           });
 
           dumpProcess.on('close', (code) => {
             if (code === 0) {
+              console.log('pg_dump completed successfully');
               resolve();
             } else {
-              reject(new Error(`pg_dump failed with code ${code}`));
+              console.error(`pg_dump exited with code ${code}`);
+              reject(new Error(`pg_dump failed with code ${code}. Error: ${stderrData}`));
             }
           });
 
           dumpProcess.on('error', (error) => {
+            console.error('Failed to start pg_dump:', error);
             reject(new Error(`Failed to execute pg_dump: ${error.message}`));
           });
         });
 
-        // Build pg_restore command
+        // Build pg_restore command args
         const restoreArgs = [
-          '-h', global.connectionInfo.host,
-          '-p', global.connectionInfo.port.toString(),
-          '-U', global.connectionInfo.user,
-          '-d', options.targetDb,
-          '-v', // Verbose mode
+          `-h`, connInfo.host,
+          `-p`, connInfo.port.toString(),
+          `-U`, connInfo.user,
+          `-d`, options.targetDb,
+          `-v`, // verbose mode
           tempFile
         ];
+
+        console.log('Running pg_restore command:', pgRestoreBin, restoreArgs.join(' '));
 
         // Run pg_restore to restore backup to the new database
         await new Promise((resolve, reject) => {
           const restoreProcess = spawn(pgRestoreBin, restoreArgs, { env });
 
+          let stdoutData = '';
+          let stderrData = '';
+
+          restoreProcess.stdout.on('data', (data) => {
+            stdoutData += data.toString();
+            console.log(`pg_restore stdout: ${data}`);
+          });
+
           restoreProcess.stderr.on('data', (data) => {
+            stderrData += data.toString();
             console.log(`pg_restore stderr: ${data}`);
           });
 
           restoreProcess.on('close', (code) => {
-            // pg_restore can have non-zero exit codes even on successful restores
-            // due to warnings or non-fatal errors
-            resolve();
+            // pg_restore can have non-zero exit codes for non-fatal errors/warnings
+            console.log(`pg_restore exited with code ${code}`);
+
+            if (code === 0 || stderrData.includes('errors ignored on restore')) {
+              console.log('pg_restore completed successfully with possible warnings');
+              resolve();
+            } else {
+              reject(new Error(`pg_restore failed with code ${code}. Error: ${stderrData}`));
+            }
           });
 
           restoreProcess.on('error', (error) => {
+            console.error('Failed to start pg_restore:', error);
             reject(new Error(`Failed to execute pg_restore: ${error.message}`));
           });
         });
 
         // Clean up the temporary file
-        fs.unlinkSync(tempFile);
+        try {
+          fs.unlinkSync(tempFile);
+          console.log(`Removed temporary file: ${tempFile}`);
+        } catch (error) {
+          console.error(`Warning: Could not remove temporary file ${tempFile}:`, error);
+          // Non-fatal error, continue
+        }
       } else {
-        // Just transfer schema without data - simpler approach
-        await pgClient.query(`
-        CREATE EXTENSION IF NOT EXISTS dblink;
-        
-        DO $$
-        DECLARE
-          obj record;
-        BEGIN
-          -- Create schemas (without data)
-          FOR obj IN SELECT nspname FROM pg_namespace
-                     WHERE nspname NOT LIKE 'pg_%' 
-                     AND nspname != 'information_schema'
-                     FROM dblink('dbname=${options.sourceDb}', 
-                     'SELECT nspname FROM pg_namespace WHERE nspname NOT LIKE ''pg_%'' AND nspname != ''information_schema''')
-                     AS t(nspname name)
-          LOOP
-            EXECUTE format('CREATE SCHEMA IF NOT EXISTS %I', obj.nspname);
-          END LOOP;
-        END $$;
+        // Schema-only clone using SQL (simpler approach)
+        console.log('Performing schema-only clone...');
+
+        // This direct SQL approach transfers database structure without data
+        // It's not as comprehensive as pg_dump, but works for basic schema cloning
+
+        // First, we'll get a list of schemas to clone
+        const schemasQuery = await pgClient.query(`
+        SELECT schema_name 
+        FROM information_schema.schemata 
+        WHERE schema_name NOT LIKE 'pg_%' 
+        AND schema_name != 'information_schema'
       `);
+
+        // Create a new connection to the target database
+        const targetClient = new Client({
+          host: global.connectionInfo.host,
+          port: global.connectionInfo.port,
+          user: global.connectionInfo.user,
+          password: global.connectionInfo.password,
+          database: options.targetDb
+        });
+
+        await targetClient.connect();
+
+        try {
+          // Create schemas in the target database
+          for (const schemaRow of schemasQuery.rows) {
+            const schemaName = schemaRow.schema_name;
+            if (schemaName !== 'public') { // 'public' already exists
+              await targetClient.query(`CREATE SCHEMA IF NOT EXISTS "${schemaName}"`);
+            }
+          }
+
+          // Now, we need to get table definitions from the source database and create them in the target
+          // We'll use a tempdb connection to the source database
+          const sourceClient = new Client({
+            host: global.connectionInfo.host,
+            port: global.connectionInfo.port,
+            user: global.connectionInfo.user,
+            password: global.connectionInfo.password,
+            database: options.sourceDb
+          });
+
+          await sourceClient.connect();
+
+          try {
+            // Get list of tables
+            const tablesQuery = await sourceClient.query(`
+            SELECT table_schema, table_name
+            FROM information_schema.tables
+            WHERE table_schema NOT LIKE 'pg_%'
+            AND table_schema != 'information_schema'
+            AND table_type = 'BASE TABLE'
+          `);
+
+            // Clone each table structure
+            for (const tableRow of tablesQuery.rows) {
+              const schema = tableRow.table_schema;
+              const table = tableRow.table_name;
+
+              // Get CREATE TABLE statement
+              const ddlQuery = await sourceClient.query(`
+              SELECT pg_get_ddl('${schema}.${table}'::regclass) as ddl
+            `);
+
+              if (ddlQuery.rows.length > 0 && ddlQuery.rows[0].ddl) {
+                // Execute the CREATE TABLE statement in the target database
+                await targetClient.query(ddlQuery.rows[0].ddl);
+              }
+            }
+          } finally {
+            await sourceClient.end();
+          }
+        } finally {
+          await targetClient.end();
+        }
       }
 
       // Return success
       return { success: true };
     } catch (error) {
       console.error(`Error cloning database ${options.sourceDb} to ${options.targetDb}:`, error);
-      throw error;
+      return { success: false, error: error.message };
     }
   });
 

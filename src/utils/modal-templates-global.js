@@ -9,8 +9,10 @@ window.modalTemplates = {
    * @param {string} dbName - Original database name
    * @returns {string} HTML template for clone database modal
    */
+
   getCloneDatabaseTemplate: function (dbName) {
-    const suggestedName = `${dbName}_clone_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`;
+    const currentDate = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const suggestedName = `${dbName}_clone_${currentDate}`;
 
     return `
       <div class="modal-header">
@@ -27,10 +29,10 @@ window.modalTemplates = {
             <label for="target-db">New Database Name</label>
             <input type="text" id="target-db" name="targetDb" value="${suggestedName}" required />
             <div class="name-suggestions">
-              <button type="button" class="suggestion-btn" data-name="${dbName}_clone">Basic Clone</button>
-              <button type="button" class="suggestion-btn" data-name="${dbName}_dev">Dev</button>
-              <button type="button" class="suggestion-btn" data-name="${dbName}_test">Test</button>
-              <button type="button" class="suggestion-btn" data-name="${suggestedName}">Dated</button>
+              <button type="button" class="suggestion-btn" data-name="${dbName}_clone" onclick="document.getElementById('target-db').value=this.getAttribute('data-name')">Basic Clone</button>
+              <button type="button" class="suggestion-btn" data-name="${dbName}_dev" onclick="document.getElementById('target-db').value=this.getAttribute('data-name')">Dev</button>
+              <button type="button" class="suggestion-btn" data-name="${dbName}_test" onclick="document.getElementById('target-db').value=this.getAttribute('data-name')">Test</button>
+              <button type="button" class="suggestion-btn" data-name="${suggestedName}" onclick="document.getElementById('target-db').value=this.getAttribute('data-name')">Dated</button>
             </div>
           </div>
           <div class="modal-form-group">
@@ -49,17 +51,8 @@ window.modalTemplates = {
           <button type="submit" class="modal-btn modal-submit-btn">Clone Database</button>
         </div>
       </form>
-      <script>
-        // Add event listeners to the suggestion buttons
-        document.querySelectorAll('.suggestion-btn').forEach(btn => {
-          btn.addEventListener('click', () => {
-            document.getElementById('target-db').value = btn.getAttribute('data-name');
-          });
-        });
-      </script>
     `;
   },
-
   /**
    * Get modal template for backing up a database
    * @param {string} dbName - Database name
