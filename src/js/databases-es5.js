@@ -151,13 +151,33 @@ window.showCloneModal = function (dbName) {
         return;
       }
 
-      // Show loading indicator
+      // Show loading indicator with progress information
       const loadingElement = document.createElement('div');
       loadingElement.className = 'modal-loading';
-      loadingElement.innerHTML = '<div class="spinner"></div><p>Cloning database...</p>';
+      loadingElement.innerHTML = `
+        <div class="spinner"></div>
+        <p id="clone-status">Initializing database clone...</p>
+      `;
       document.body.appendChild(loadingElement);
 
       try {
+        const cloneStatus = document.getElementById('clone-status');
+
+        // Update status periodically to keep the user informed
+        const statusUpdates = [
+          'Creating target database...',
+          'Preparing to copy database structure...',
+          data.withData === 'true' ? 'Copying data (this may take a while)...' : 'Transferring schema without data...',
+          'Finalizing database clone...'
+        ];
+
+        let updateIndex = 0;
+        const statusInterval = setInterval(() => {
+          if (updateIndex < statusUpdates.length) {
+            cloneStatus.textContent = statusUpdates[updateIndex++];
+          }
+        }, 2000);
+
         // Call the database operation service
         if (window.dbOperations) {
           const result = await window.dbOperations.cloneDatabase(
@@ -165,6 +185,9 @@ window.showCloneModal = function (dbName) {
             data.targetDb,
             data.withData === 'true'
           );
+
+          // Clear the status interval
+          clearInterval(statusInterval);
 
           // Remove loading indicator
           document.body.removeChild(loadingElement);
@@ -179,6 +202,7 @@ window.showCloneModal = function (dbName) {
           }
         } else {
           // Fallback for backward compatibility
+          clearInterval(statusInterval);
           alert(`Clone functionality for "${data.sourceDb}" to "${data.targetDb}" with data=${data.withData} will be implemented in a future update.`);
           document.body.removeChild(loadingElement);
         }

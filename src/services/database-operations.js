@@ -8,20 +8,17 @@ const cloneDatabase = async (sourceDb, targetDb, includeData) => {
   console.log(`Cloning database ${sourceDb} to ${targetDb} with data=${includeData}`);
   
   try {
-    // Here you would implement the actual cloning logic
-    // For example, make a request to your backend API:
-    
-    // Mock implementation for now
-    return new Promise((resolve) => {
-      // Simulate async operation
-      setTimeout(() => {
-        console.log(`Clone completed from ${sourceDb} to ${targetDb}`);
-        resolve({
-          success: true,
-          message: `Successfully cloned ${sourceDb} to ${targetDb}`
-        });
-      }, 1000);
+    // Call the API to clone the database
+    const result = await window.api.cloneDatabase({
+      sourceDb,
+      targetDb,
+      withData: includeData
     });
+    
+    return {
+      success: true,
+      message: `Successfully cloned ${sourceDb} to ${targetDb}`
+    };
   } catch (error) {
     console.error('Error cloning database:', error);
     return {
