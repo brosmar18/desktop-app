@@ -2,25 +2,8 @@
 document.addEventListener('DOMContentLoaded', () => {
   console.log('DOM fully loaded');
   
-  const themeToggleBtn = document.getElementById('theme-toggle-btn');
-  const body = document.body;
-  
-  // Check system preference
-  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-  body.className = prefersDark ? 'dark-mode' : 'light-mode';
-  themeToggleBtn.textContent = prefersDark ? '☀️' : '🌙';
-  
-  // Toggle theme
-  themeToggleBtn.addEventListener('click', () => {
-    const isDarkMode = body.classList.contains('dark-mode');
-    body.className = isDarkMode ? 'light-mode' : 'dark-mode';
-    themeToggleBtn.textContent = isDarkMode ? '🌙' : '☀️';
-    
-    // Tell the main process about the theme change
-    if (window.api) {
-      window.api.send('setTheme', !isDarkMode);
-    }
-  });
+  // Initialize theme toggle
+  initTheme();
   
   // Form submission
   const loginForm = document.getElementById('login-form');
@@ -29,7 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (loginForm) {
     console.log('Login form found');
     
-    loginForm.addEventListener('submit', (e) => {
+    loginForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       console.log('Login form submitted');
       
@@ -74,48 +57,26 @@ document.addEventListener('DOMContentLoaded', () => {
       
       console.log('Connecting to:', { host, port, user: username });
       
-      // Send login details to main process
-      if (window.api) {
-        window.api.send('pgConnect', {
+      try {
+        await connectToDatabase({
           host,
           port,
           user: username,
           password
         });
-        
-        // Listen for response
-        window.api.receive('pgConnectResponse', (response) => {
-          console.log('Received response:', response);
-          submitButton.textContent = originalText;
-          submitButton.disabled = false;
-          
-          if (!response.success) {
-            loginError.textContent = response.error || 'Connection failed';
-            loginError.style.display = 'block';
-          }
-          // Success handling is done by main process loading home page
-        });
-      } else {
-        // For debugging when API is not available
-        console.error('API not available!');
+        // Success is handled by main process loading the home page
+      } catch (error) {
+        console.error('Connection error:', error);
         submitButton.textContent = originalText;
         submitButton.disabled = false;
         
         if (loginError) {
-          loginError.textContent = 'API not available. Check preload script.';
+          loginError.textContent = error.message || 'Connection failed';
           loginError.style.display = 'block';
         }
       }
     });
   } else {
     console.error('Login form not found');
-  }
-  
-  // Handle logout response (redirects back to login)
-  if (window.api) {
-    window.api.receive('logoutResponse', () => {
-      // The main process will load the login page
-      console.log('Logged out successfully');
-    });
   }
 });

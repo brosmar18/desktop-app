@@ -5,7 +5,9 @@ let allDatabases = [];
 
 // Wait for DOM to be fully loaded before executing code
 document.addEventListener('DOMContentLoaded', async () => {
-  setupThemeToggle();
+  // Initialize theme toggle
+  initTheme();
+  
   setupLogout();
   setupSearch();
   setupBackButton();
@@ -14,57 +16,43 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadDatabases();
 });
 
-// Set up theme toggle functionality
-function setupThemeToggle() {
-  const themeToggleBtn = document.getElementById('theme-toggle-btn');
-  const body = document.body;
-  
-  // Check system preference for dark/light mode
-  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-  body.className = prefersDark ? 'dark-mode' : 'light-mode';
-  themeToggleBtn.textContent = prefersDark ? '☀️' : '🌙';
-  
-  // Toggle theme when button is clicked
-  themeToggleBtn.addEventListener('click', () => {
-    const isDarkMode = body.classList.contains('dark-mode');
-    body.className = isDarkMode ? 'light-mode' : 'dark-mode';
-    themeToggleBtn.textContent = isDarkMode ? '🌙' : '☀️';
-    
-    // Notify main process of theme change
-    if (window.api) {
-      window.api.send('setTheme', !isDarkMode);
-    }
-  });
-}
-
 // Set up logout button
 function setupLogout() {
   const logoutBtn = document.getElementById('logout-btn');
   
-  logoutBtn.addEventListener('click', () => {
-    if (window.api) {
-      window.api.send('logout');
-    }
-  });
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', async () => {
+      try {
+        await logout();
+        console.log('Logged out successfully');
+      } catch (error) {
+        console.error('Logout failed:', error);
+      }
+    });
+  }
 }
 
 // Set up database search functionality
 function setupSearch() {
   const searchInput = document.getElementById('database-search');
   
-  searchInput.addEventListener('input', (e) => {
-    const searchTerm = e.target.value.toLowerCase();
-    filterDatabases(searchTerm);
-  });
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      const searchTerm = e.target.value.toLowerCase();
+      filterDatabases(searchTerm);
+    });
+  }
 }
 
 // Set up back button for columns view
 function setupBackButton() {
   const backButton = document.getElementById('back-to-tables');
   
-  backButton.addEventListener('click', () => {
-    showTablesView();
-  });
+  if (backButton) {
+    backButton.addEventListener('click', () => {
+      showTablesView();
+    });
+  }
 }
 
 // Load databases from PostgreSQL
@@ -72,16 +60,16 @@ async function loadDatabases() {
   try {
     // Show loading state
     const databaseList = document.getElementById('database-list');
+    if (!databaseList) {
+      throw new Error('Database list element not found');
+    }
+    
     databaseList.innerHTML = '<li class="list-item loading">Loading databases...</li>';
     
     console.log('Fetching databases...');
     
     // Call API to get databases
-    if (!window.api) {
-      throw new Error('API not available');
-    }
-    
-    const databases = await window.api.getDatabases();
+    const databases = await getDatabases();
     console.log('Databases loaded:', databases);
     
     // Store all databases for filtering
@@ -92,13 +80,20 @@ async function loadDatabases() {
   } catch (error) {
     console.error('Error loading databases:', error);
     const databaseList = document.getElementById('database-list');
-    databaseList.innerHTML = `<li class="list-item error">Error loading databases: ${error.message}</li>`;
+    if (databaseList) {
+      databaseList.innerHTML = `<li class="list-item error">Error loading databases: ${error.message}</li>`;
+    }
   }
 }
 
 // Render database list in the sidebar
 function renderDatabaseList(databases) {
   const databaseList = document.getElementById('database-list');
+  
+  if (!databaseList) {
+    console.error('Database list element not found');
+    return;
+  }
   
   if (!databases || databases.length === 0) {
     databaseList.innerHTML = '<li class="list-item empty">No databases found</li>';
@@ -153,19 +148,28 @@ async function loadTables(dbName) {
     currentDb = dbName;
     
     // Update UI to show tables view
-    document.getElementById('no-selection').style.display = 'none';
-    document.getElementById('columns-view').style.display = 'none';
-    document.getElementById('tables-view').style.display = 'block';
-    document.getElementById('selected-db-name').textContent = dbName;
+    const noSelection = document.getElementById('no-selection');
+    const columnsView = document.getElementById('columns-view');
+    const tablesView = document.getElementById('tables-view');
+    const selectedDbName = document.getElementById('selected-db-name');
+    
+    if (noSelection) noSelection.style.display = 'none';
+    if (columnsView) columnsView.style.display = 'none';
+    if (tablesView) tablesView.style.display = 'block';
+    if (selectedDbName) selectedDbName.textContent = dbName;
     
     // Show loading state
     const tablesList = document.getElementById('tables-list');
+    if (!tablesList) {
+      throw new Error('Tables list element not found');
+    }
+    
     tablesList.innerHTML = '<li class="loading">Loading tables...</li>';
     
     console.log('Loading tables for database:', dbName);
     
     // Call API to get tables
-    const tables = await window.api.getTables(dbName);
+    const tables = await getTables(dbName);
     console.log('Tables loaded:', tables);
     
     // Render tables
@@ -173,13 +177,20 @@ async function loadTables(dbName) {
   } catch (error) {
     console.error(`Error loading tables for ${dbName}:`, error);
     const tablesList = document.getElementById('tables-list');
-    tablesList.innerHTML = `<li class="error">Error loading tables: ${error.message}</li>`;
+    if (tablesList) {
+      tablesList.innerHTML = `<li class="error">Error loading tables: ${error.message}</li>`;
+    }
   }
 }
 
 // Render tables list in the main panel
 function renderTablesList(tables) {
   const tablesList = document.getElementById('tables-list');
+  
+  if (!tablesList) {
+    console.error('Tables list element not found');
+    return;
+  }
   
   if (!tables || tables.length === 0) {
     tablesList.innerHTML = '<li class="empty">No tables found in this database</li>';
@@ -219,18 +230,26 @@ async function loadColumns(tableName) {
     // Update UI to show columns view
     showColumnsView();
     
-    document.getElementById('selected-table-name').textContent = tableName;
-    document.getElementById('db-breadcrumb').textContent = currentDb;
-    document.getElementById('table-breadcrumb').textContent = tableName;
+    const selectedTableName = document.getElementById('selected-table-name');
+    const dbBreadcrumb = document.getElementById('db-breadcrumb');
+    const tableBreadcrumb = document.getElementById('table-breadcrumb');
+    
+    if (selectedTableName) selectedTableName.textContent = tableName;
+    if (dbBreadcrumb) dbBreadcrumb.textContent = currentDb;
+    if (tableBreadcrumb) tableBreadcrumb.textContent = tableName;
     
     // Show loading state
     const columnsList = document.getElementById('columns-list');
+    if (!columnsList) {
+      throw new Error('Columns list element not found');
+    }
+    
     columnsList.innerHTML = '<tr><td colspan="4" class="loading">Loading columns...</td></tr>';
     
     console.log('Loading columns for table:', tableName);
     
     // Call API to get columns
-    const columns = await window.api.getColumns(currentDb, tableName);
+    const columns = await getColumns(currentDb, tableName);
     console.log('Columns loaded:', columns);
     
     // Render columns
@@ -238,13 +257,20 @@ async function loadColumns(tableName) {
   } catch (error) {
     console.error(`Error loading columns for ${tableName}:`, error);
     const columnsList = document.getElementById('columns-list');
-    columnsList.innerHTML = `<tr><td colspan="4" class="error">Error loading columns: ${error.message}</td></tr>`;
+    if (columnsList) {
+      columnsList.innerHTML = `<tr><td colspan="4" class="error">Error loading columns: ${error.message}</td></tr>`;
+    }
   }
 }
 
 // Render columns list for the selected table
 function renderColumnsList(columns) {
   const columnsList = document.getElementById('columns-list');
+  
+  if (!columnsList) {
+    console.error('Columns list element not found');
+    return;
+  }
   
   if (!columns || columns.length === 0) {
     columnsList.innerHTML = '<tr><td colspan="4" class="empty">No columns found in this table</td></tr>';
@@ -279,12 +305,18 @@ function renderColumnsList(columns) {
 
 // Show tables view and hide columns view
 function showTablesView() {
-  document.getElementById('columns-view').style.display = 'none';
-  document.getElementById('tables-view').style.display = 'block';
+  const columnsView = document.getElementById('columns-view');
+  const tablesView = document.getElementById('tables-view');
+  
+  if (columnsView) columnsView.style.display = 'none';
+  if (tablesView) tablesView.style.display = 'block';
 }
 
 // Show columns view and hide tables view
 function showColumnsView() {
-  document.getElementById('tables-view').style.display = 'none';
-  document.getElementById('columns-view').style.display = 'block';
+  const tablesView = document.getElementById('tables-view');
+  const columnsView = document.getElementById('columns-view');
+  
+  if (tablesView) tablesView.style.display = 'none';
+  if (columnsView) columnsView.style.display = 'block';
 }

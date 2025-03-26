@@ -9,6 +9,8 @@ let pgClient = null;
 // Store connection info globally
 global.connectionInfo = null;
 
+// ===== Window Management =====
+
 // Create the browser window
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -38,10 +40,7 @@ function createWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null;
     // Close PostgreSQL connection if exists
-    if (pgClient) {
-      pgClient.end();
-      pgClient = null;
-    }
+    closePgConnection();
   });
 }
 
@@ -63,32 +62,10 @@ function loadHomePage() {
   }));
 }
 
-// Create window when Electron has finished initialization
-app.whenReady().then(() => {
-  createWindow();
+// ===== Database Connection =====
 
-  // On macOS, recreate window when dock icon is clicked and no windows are open
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
-    }
-  });
-});
-
-// Quit when all windows are closed, except on macOS
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
-});
-
-// Handle getting connection info (synchronous)
-ipcMain.handle('getConnectionInfo', async () => {
-  return global.connectionInfo;
-});
-
-// Handle PostgreSQL connection
-ipcMain.on('pgConnect', async (event, credentials) => {
+// Establish PostgreSQL connection
+async function connectToPg(credentials) {
   console.log('Attempting to connect to PostgreSQL:', {
     host: credentials.host,
     port: credentials.port,
@@ -98,10 +75,7 @@ ipcMain.on('pgConnect', async (event, credentials) => {
   });
 
   // Close existing connection if any
-  if (pgClient) {
-    await pgClient.end().catch(err => console.error('Error closing existing connection:', err));
-    pgClient = null;
-  }
+  await closePgConnection();
 
   // Create new client
   pgClient = new Client({
@@ -131,129 +105,173 @@ ipcMain.on('pgConnect', async (event, credentials) => {
       currentDb: res.rows[0].db
     };
 
-    // Success - Load home page
-    loadHomePage();
-
+    return { success: true, data: res.rows[0] };
   } catch (error) {
     console.error('PostgreSQL connection error:', error);
-
-    // Send error back to renderer
-    mainWindow.webContents.send('pgConnectResponse', {
-      success: false,
-      error: error.message || 'Failed to connect to PostgreSQL server'
-    });
-
+    
     // Clean up failed connection
-    if (pgClient) {
-      pgClient.end().catch(err => console.error('Error closing PG client:', err));
-      pgClient = null;
-    }
+    await closePgConnection();
+    
+    return { success: false, error: error.message || 'Failed to connect to PostgreSQL server' };
   }
-});
+}
 
-// Handle logout
-ipcMain.on('logout', async (event) => {
-  console.log('Logout requested');
-
-  // Close PostgreSQL connection
+// Close PostgreSQL connection
+async function closePgConnection() {
   if (pgClient) {
     try {
       await pgClient.end();
       console.log('PostgreSQL connection closed');
-    } catch (error) {
-      console.error('Error closing PostgreSQL connection:', error);
+    } catch (err) {
+      console.error('Error closing existing connection:', err);
     }
     pgClient = null;
   }
+}
 
-  // Clear connection info
-  global.connectionInfo = null;
+// ===== IPC Handlers =====
 
-  // Load login page
-  loadLoginPage();
+// Set up all IPC handlers
+function setupIpcHandlers() {
+  // Handle getting connection info (synchronous)
+  ipcMain.handle('getConnectionInfo', async () => {
+    return global.connectionInfo;
+  });
 
-  // Send response to renderer
-  mainWindow.webContents.send('logoutResponse', { success: true });
-});
-
-// Handle theme change
-ipcMain.on('setTheme', (event, isDarkMode) => {
-  // You could save this preference
-  console.log('Theme changed to:', isDarkMode ? 'dark' : 'light');
-});
-
-// Get all databases
-ipcMain.handle('getDatabases', async () => {
-  try {
-    if (!pgClient) {
-      throw new Error('Not connected to PostgreSQL');
+  // Handle PostgreSQL connection
+  ipcMain.on('pgConnect', async (event, credentials) => {
+    const result = await connectToPg(credentials);
+    
+    if (result.success) {
+      // Success - Load home page
+      loadHomePage();
+    } else {
+      // Send error back to renderer
+      mainWindow.webContents.send('pgConnectResponse', {
+        success: false,
+        error: result.error
+      });
     }
+  });
 
-    // Use a simpler query that works reliably across PostgreSQL versions
-    const query = `
-      SELECT datname AS name
-      FROM pg_database
-      WHERE datistemplate = false
-      ORDER BY datname
-    `;
-    const result = await pgClient.query(query);
-    return result.rows;
-  } catch (error) {
-    console.error('Error fetching databases:', error);
-    throw error;
-  }
+  // Handle logout
+  ipcMain.on('logout', async (event) => {
+    console.log('Logout requested');
+
+    // Close PostgreSQL connection
+    await closePgConnection();
+
+    // Clear connection info
+    global.connectionInfo = null;
+
+    // Load login page
+    loadLoginPage();
+
+    // Send response to renderer
+    mainWindow.webContents.send('logoutResponse', { success: true });
+  });
+
+  // Handle theme change
+  ipcMain.on('setTheme', (event, isDarkMode) => {
+    // You could save this preference
+    console.log('Theme changed to:', isDarkMode ? 'dark' : 'light');
+  });
+
+  // Get all databases
+  ipcMain.handle('getDatabases', async () => {
+    try {
+      if (!pgClient) {
+        throw new Error('Not connected to PostgreSQL');
+      }
+
+      // Use a simpler query that works reliably across PostgreSQL versions
+      const query = `
+        SELECT datname AS name
+        FROM pg_database
+        WHERE datistemplate = false
+        ORDER BY datname
+      `;
+      const result = await pgClient.query(query);
+      return result.rows;
+    } catch (error) {
+      console.error('Error fetching databases:', error);
+      throw error;
+    }
+  });
+
+  // Get tables for a database
+  ipcMain.handle('getTables', async (event, dbName) => {
+    try {
+      if (!pgClient) {
+        throw new Error('Not connected to PostgreSQL');
+      }
+
+      // Switch to the selected database
+      await pgClient.query(`SET search_path TO ${dbName}`);
+
+      const query = `
+        SELECT table_name AS name
+        FROM information_schema.tables
+        WHERE table_schema = 'public'
+        ORDER BY table_name
+      `;
+
+      const result = await pgClient.query(query);
+      return result.rows;
+    } catch (error) {
+      console.error(`Error fetching tables for ${dbName}:`, error);
+      throw error;
+    }
+  });
+
+  // Get columns for a table
+  ipcMain.handle('getColumns', async (event, dbName, tableName) => {
+    try {
+      if (!pgClient) {
+        throw new Error('Not connected to PostgreSQL');
+      }
+
+      // Switch to the selected database
+      await pgClient.query(`SET search_path TO ${dbName}`);
+
+      const query = `
+        SELECT 
+          column_name AS name, 
+          data_type AS type,
+          CASE WHEN is_nullable = 'YES' THEN true ELSE false END AS nullable,
+          column_default AS default
+        FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = $1
+        ORDER BY ordinal_position
+      `;
+
+      const result = await pgClient.query(query, [tableName]);
+      return result.rows;
+    } catch (error) {
+      console.error(`Error fetching columns for ${tableName}:`, error);
+      throw error;
+    }
+  });
+}
+
+// ===== App Lifecycle =====
+
+// Create window when Electron has finished initialization
+app.whenReady().then(() => {
+  createWindow();
+  setupIpcHandlers();
+
+  // On macOS, recreate window when dock icon is clicked and no windows are open
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow();
+    }
+  });
 });
 
-// Get tables for a database
-ipcMain.handle('getTables', async (event, dbName) => {
-  try {
-    if (!pgClient) {
-      throw new Error('Not connected to PostgreSQL');
-    }
-
-    // Switch to the selected database
-    await pgClient.query(`SET search_path TO ${dbName}`);
-
-    const query = `
-      SELECT table_name AS name
-      FROM information_schema.tables
-      WHERE table_schema = 'public'
-      ORDER BY table_name
-    `;
-
-    const result = await pgClient.query(query);
-    return result.rows;
-  } catch (error) {
-    console.error(`Error fetching tables for ${dbName}:`, error);
-    throw error;
-  }
-});
-
-// Get columns for a table
-ipcMain.handle('getColumns', async (event, dbName, tableName) => {
-  try {
-    if (!pgClient) {
-      throw new Error('Not connected to PostgreSQL');
-    }
-
-    // Switch to the selected database
-    await pgClient.query(`SET search_path TO ${dbName}`);
-
-    const query = `
-      SELECT 
-        column_name AS name, 
-        data_type AS type,
-        CASE WHEN is_nullable = 'YES' THEN true ELSE false END AS nullable,
-        column_default AS default
-      FROM information_schema.columns
-      WHERE table_schema = 'public' AND table_name = $1
-      ORDER BY ordinal_position
-    `;
-
-    const result = await pgClient.query(query, [tableName]);
-    return result.rows;
-  } catch (error) {
-    console.error(`Error fetching columns for ${tableName}:`, error);
-    throw error;
+// Quit when all windows are closed, except on macOS
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') {
+    app.quit();
   }
 });
