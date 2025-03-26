@@ -1,13 +1,17 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const url = require('url');
 const { Client } = require('pg');
+const { spawn } = require('child_process');
+const fs = require('fs');
 
 // Keep a global reference of the window object to prevent it from being garbage collected
 let mainWindow;
 let pgClient = null;
 // Store connection info globally
 global.connectionInfo = null;
+
+// ===== Window Management =====
 
 // Create the browser window
 function createWindow() {
@@ -38,10 +42,7 @@ function createWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null;
     // Close PostgreSQL connection if exists
-    if (pgClient) {
-      pgClient.end();
-      pgClient = null;
-    }
+    closePgConnection();
   });
 }
 
@@ -63,32 +64,10 @@ function loadHomePage() {
   }));
 }
 
-// Create window when Electron has finished initialization
-app.whenReady().then(() => {
-  createWindow();
+// ===== Database Connection =====
 
-  // On macOS, recreate window when dock icon is clicked and no windows are open
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
-    }
-  });
-});
-
-// Quit when all windows are closed, except on macOS
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
-});
-
-// Handle getting connection info (synchronous)
-ipcMain.handle('getConnectionInfo', async () => {
-  return global.connectionInfo;
-});
-
-// Handle PostgreSQL connection
-ipcMain.on('pgConnect', async (event, credentials) => {
+// Establish PostgreSQL connection
+async function connectToPg(credentials) {
   console.log('Attempting to connect to PostgreSQL:', {
     host: credentials.host,
     port: credentials.port,
@@ -98,10 +77,7 @@ ipcMain.on('pgConnect', async (event, credentials) => {
   });
 
   // Close existing connection if any
-  if (pgClient) {
-    await pgClient.end().catch(err => console.error('Error closing existing connection:', err));
-    pgClient = null;
-  }
+  await closePgConnection();
 
   // Create new client
   pgClient = new Client({
@@ -131,79 +107,101 @@ ipcMain.on('pgConnect', async (event, credentials) => {
       currentDb: res.rows[0].db
     };
 
-    // Success - Load home page
-    loadHomePage();
-
+    return { success: true, data: res.rows[0] };
   } catch (error) {
     console.error('PostgreSQL connection error:', error);
-
-    // Send error back to renderer
-    mainWindow.webContents.send('pgConnectResponse', {
-      success: false,
-      error: error.message || 'Failed to connect to PostgreSQL server'
-    });
-
+    
     // Clean up failed connection
-    if (pgClient) {
-      pgClient.end().catch(err => console.error('Error closing PG client:', err));
-      pgClient = null;
-    }
+    await closePgConnection();
+    
+    return { success: false, error: error.message || 'Failed to connect to PostgreSQL server' };
   }
-});
+}
 
-// Handle logout
-ipcMain.on('logout', async (event) => {
-  console.log('Logout requested');
-
-  // Close PostgreSQL connection
+// Close PostgreSQL connection
+async function closePgConnection() {
   if (pgClient) {
     try {
       await pgClient.end();
       console.log('PostgreSQL connection closed');
-    } catch (error) {
-      console.error('Error closing PostgreSQL connection:', error);
+    } catch (err) {
+      console.error('Error closing existing connection:', err);
     }
     pgClient = null;
   }
+}
 
-  // Clear connection info
-  global.connectionInfo = null;
+// ===== IPC Handlers =====
 
-  // Load login page
-  loadLoginPage();
+// Set up all IPC handlers
+function setupIpcHandlers() {
+  // Handle getting connection info (synchronous)
+  ipcMain.handle('getConnectionInfo', async () => {
+    return global.connectionInfo;
+  });
 
-  // Send response to renderer
-  mainWindow.webContents.send('logoutResponse', { success: true });
-});
-
-// Handle theme change
-ipcMain.on('setTheme', (event, isDarkMode) => {
-  // You could save this preference
-  console.log('Theme changed to:', isDarkMode ? 'dark' : 'light');
-});
-
-// Get all databases
-ipcMain.handle('getDatabases', async () => {
-  try {
-    if (!pgClient) {
-      throw new Error('Not connected to PostgreSQL');
+  // Handle PostgreSQL connection
+  ipcMain.on('pgConnect', async (event, credentials) => {
+    const result = await connectToPg(credentials);
+    
+    if (result.success) {
+      // Success - Load home page
+      loadHomePage();
+    } else {
+      // Send error back to renderer
+      mainWindow.webContents.send('pgConnectResponse', {
+        success: false,
+        error: result.error
+      });
     }
+  });
 
-    // Use a simpler query that works reliably across PostgreSQL versions
-    const query = `
-      SELECT datname AS name
-      FROM pg_database
-      WHERE datistemplate = false
-      ORDER BY datname
-    `;
-    const result = await pgClient.query(query);
-    return result.rows;
-  } catch (error) {
-    console.error('Error fetching databases:', error);
-    throw error;
-  }
-});
+  // Handle logout
+  ipcMain.on('logout', async (event) => {
+    console.log('Logout requested');
 
+    // Close PostgreSQL connection
+    await closePgConnection();
+
+    // Clear connection info
+    global.connectionInfo = null;
+
+    // Load login page
+    loadLoginPage();
+
+    // Send response to renderer
+    mainWindow.webContents.send('logoutResponse', { success: true });
+  });
+
+  // Handle theme change
+  ipcMain.on('setTheme', (event, isDarkMode) => {
+    // You could save this preference
+    console.log('Theme changed to:', isDarkMode ? 'dark' : 'light');
+  });
+
+  // Get all databases
+  ipcMain.handle('getDatabases', async () => {
+    try {
+      if (!pgClient) {
+        throw new Error('Not connected to PostgreSQL');
+      }
+
+      // Use a simpler query that works reliably across PostgreSQL versions
+      const query = `
+        SELECT datname AS name
+        FROM pg_database
+        WHERE datistemplate = false
+        ORDER BY datname
+      `;
+      const result = await pgClient.query(query);
+      return result.rows;
+    } catch (error) {
+      console.error('Error fetching databases:', error);
+      throw error;
+    }
+  });
+
+  // Get tables for a database
 // Get tables for a database
 ipcMain.handle('getTables', async (event, dbName) => {
   try {
@@ -211,9 +209,27 @@ ipcMain.handle('getTables', async (event, dbName) => {
       throw new Error('Not connected to PostgreSQL');
     }
 
-    // Switch to the selected database
-    await pgClient.query(`SET search_path TO ${dbName}`);
+    // Close the existing connection
+    await pgClient.end();
+    
+    // Create a new connection to the selected database
+    pgClient = new Client({
+      host: global.connectionInfo.host,
+      port: global.connectionInfo.port,
+      user: global.connectionInfo.user,
+      password: global.connectionInfo.password,
+      database: dbName // Connect directly to the selected database
+    });
+    
+    // Connect to the database
+    await pgClient.connect();
+    console.log(`Connected to database: ${dbName}`);
+    
+    // Update the global connection info
+    global.connectionInfo.database = dbName;
+    global.connectionInfo.currentDb = dbName;
 
+    // Now query for tables in this database
     const query = `
       SELECT table_name AS name
       FROM information_schema.tables
@@ -222,6 +238,7 @@ ipcMain.handle('getTables', async (event, dbName) => {
     `;
 
     const result = await pgClient.query(query);
+    console.log(`Found ${result.rows.length} tables in ${dbName}`);
     return result.rows;
   } catch (error) {
     console.error(`Error fetching tables for ${dbName}:`, error);
@@ -229,6 +246,7 @@ ipcMain.handle('getTables', async (event, dbName) => {
   }
 });
 
+  // Get columns for a table
 // Get columns for a table
 ipcMain.handle('getColumns', async (event, dbName, tableName) => {
   try {
@@ -236,8 +254,28 @@ ipcMain.handle('getColumns', async (event, dbName, tableName) => {
       throw new Error('Not connected to PostgreSQL');
     }
 
-    // Switch to the selected database
-    await pgClient.query(`SET search_path TO ${dbName}`);
+    // Ensure we're connected to the right database
+    if (global.connectionInfo.database !== dbName) {
+      // Close the existing connection
+      await pgClient.end();
+      
+      // Create a new connection to the selected database
+      pgClient = new Client({
+        host: global.connectionInfo.host,
+        port: global.connectionInfo.port,
+        user: global.connectionInfo.user,
+        password: global.connectionInfo.password,
+        database: dbName // Connect directly to the selected database
+      });
+      
+      // Connect to the database
+      await pgClient.connect();
+      console.log(`Connected to database: ${dbName} for column query`);
+      
+      // Update the global connection info
+      global.connectionInfo.database = dbName;
+      global.connectionInfo.currentDb = dbName;
+    }
 
     const query = `
       SELECT 
@@ -251,9 +289,305 @@ ipcMain.handle('getColumns', async (event, dbName, tableName) => {
     `;
 
     const result = await pgClient.query(query, [tableName]);
+    console.log(`Found ${result.rows.length} columns in table ${tableName}`);
     return result.rows;
   } catch (error) {
     console.error(`Error fetching columns for ${tableName}:`, error);
     throw error;
+  }
+});
+  
+  // Create a new database
+  ipcMain.handle('createDatabase', async (event, options) => {
+    try {
+      if (!pgClient) {
+        throw new Error('Not connected to PostgreSQL');
+      }
+      
+      // Validate options
+      if (!options.name) {
+        throw new Error('Database name is required');
+      }
+      
+      // Build create database query
+      let query = `CREATE DATABASE "${options.name}"`;
+      
+      // Add owner if specified
+      if (options.owner) {
+        query += ` OWNER "${options.owner}"`;
+      }
+      
+      // Add encoding if specified
+      if (options.encoding) {
+        query += ` ENCODING '${options.encoding}'`;
+      }
+      
+      // Add template if specified
+      if (options.template) {
+        query += ` TEMPLATE ${options.template}`;
+      }
+      
+      console.log('Creating database with query:', query);
+      
+      // Execute query
+      await pgClient.query(query);
+      
+      return { success: true };
+    } catch (error) {
+      console.error(`Error creating database ${options.name}:`, error);
+      throw error;
+    }
+  });
+  
+  // Select backup file
+  ipcMain.handle('selectBackupFile', async () => {
+    if (!mainWindow) {
+      throw new Error('No active window');
+    }
+    
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: 'Select PostgreSQL Backup File',
+      filters: [
+        { name: 'PostgreSQL Backup', extensions: ['backup'] },
+        { name: 'All Files', extensions: ['*'] }
+      ],
+      properties: ['openFile']
+    });
+    
+    return {
+      canceled: result.canceled,
+      filePath: result.filePaths[0]
+    };
+  });
+  
+  // Restore database from backup (fixed version)
+  ipcMain.handle('restoreDatabase', async (event, options) => {
+    try {
+      if (!pgClient) {
+        throw new Error('Not connected to PostgreSQL');
+      }
+      
+      // Validate options
+      if (!options.database) {
+        throw new Error('Target database is required');
+      }
+      
+      if (!options.backupFile) {
+        throw new Error('Backup file is required');
+      }
+      
+      // Check if file exists
+      if (!fs.existsSync(options.backupFile)) {
+        throw new Error(`Backup file not found: ${options.backupFile}`);
+      }
+      
+      // Get connection info for pg_restore
+      const connInfo = global.connectionInfo;
+      
+      if (!connInfo) {
+        throw new Error('Connection information not available');
+      }
+      
+      // Determine PostgreSQL bin directory - this is important for finding pg_restore
+      // For development, we'll log more information to help troubleshoot
+      console.log('Connection info:', {
+        host: connInfo.host,
+        port: connInfo.port,
+        user: connInfo.user,
+        database: options.database
+      });
+      
+      // Build pg_restore command args
+      const args = [
+        `-h`, connInfo.host,
+        `-p`, connInfo.port.toString(),
+        `-U`, connInfo.user,
+        `-d`, options.database,
+        `-v` // verbose mode
+      ];
+      
+      // Add optional args
+      if (options.clean) {
+        args.push(`--clean`);
+      }
+      
+      if (options.singleTransaction) {
+        args.push(`--single-transaction`);
+      }
+      
+      // Add format specification, since pgAdmin backups are usually in custom format
+      args.push(`-F`, `c`);
+      
+      // Add backup file path
+      args.push(options.backupFile);
+      
+      console.log('Running pg_restore with command:', 'pg_restore', args.join(' '));
+      
+      // Create environment variables with password
+      const env = { ...process.env };
+      if (connInfo.password) {
+        env.PGPASSWORD = connInfo.password;
+      }
+      
+      // Log environment variables (excluding password)
+      console.log('Environment PATH:', env.PATH);
+      
+      // Spawn pg_restore process - we need to make sure we're using the correct path
+      // For different operating systems
+      let pgRestoreBin = 'pg_restore';
+      
+      // On Windows, we might need to use full path to pg_restore.exe
+      if (process.platform === 'win32') {
+        // Try common installation directories
+        const possiblePaths = [
+          'C:\\Program Files\\PostgreSQL\\latest\\bin\\pg_restore.exe',
+          'C:\\Program Files\\PostgreSQL\\14\\bin\\pg_restore.exe',
+          'C:\\Program Files\\PostgreSQL\\13\\bin\\pg_restore.exe',
+          'C:\\Program Files\\PostgreSQL\\12\\bin\\pg_restore.exe',
+        ];
+        
+        for (const path of possiblePaths) {
+          if (fs.existsSync(path)) {
+            pgRestoreBin = path;
+            break;
+          }
+        }
+      }
+      
+      // On macOS, pg_restore is often installed via Homebrew
+      if (process.platform === 'darwin') {
+        const possiblePaths = [
+          '/usr/local/bin/pg_restore',
+          '/opt/homebrew/bin/pg_restore',
+          '/Applications/PostgreSQL/bin/pg_restore'
+        ];
+        
+        for (const path of possiblePaths) {
+          if (fs.existsSync(path)) {
+            pgRestoreBin = path;
+            break;
+          }
+        }
+      }
+      
+      console.log(`Using pg_restore binary: ${pgRestoreBin}`);
+      
+      const pgRestore = spawn(pgRestoreBin, args, { 
+        env,
+        shell: true // Using shell can help with path resolution
+      });
+      
+      let stdoutOutput = '';
+      let stderrOutput = '';
+      let percent = 0;
+      
+      // Handle stdout
+      pgRestore.stdout.on('data', (data) => {
+        const text = data.toString();
+        stdoutOutput += text;
+        console.log(`pg_restore stdout: ${text}`);
+        
+        // Update progress (simulated since pg_restore doesn't provide progress)
+        percent += 2;
+        if (percent > 95) percent = 95;
+        
+        mainWindow.webContents.send('restoreProgress', {
+          percent,
+          message: 'Restoring database...'
+        });
+      });
+      
+      // Handle stderr
+      pgRestore.stderr.on('data', (data) => {
+        const text = data.toString();
+        stderrOutput += text;
+        console.log(`pg_restore stderr: ${text}`);
+        
+        // Update progress message with current operation
+        if (text.includes('processing')) {
+          mainWindow.webContents.send('restoreProgress', {
+            percent,
+            message: text.split('\n')[0] || 'Restoring database...'
+          });
+        }
+      });
+      
+      // Handle process completion
+      return new Promise((resolve, reject) => {
+        pgRestore.on('close', (code) => {
+          console.log(`pg_restore process exited with code ${code}`);
+          
+          // In pg_restore, non-zero exit codes might still be successful restores
+          // with warnings or non-fatal errors
+          if (code === 0) {
+            // Complete progress
+            mainWindow.webContents.send('restoreProgress', {
+              percent: 100,
+              message: 'Restore completed successfully'
+            });
+            
+            resolve({ 
+              success: true, 
+              output: stdoutOutput,
+              warnings: stderrOutput 
+            });
+          } else {
+            // Check if we have fatal errors or just warnings
+            if (stderrOutput.includes('errors ignored on restore')) {
+              // This is usually just a warning, many restores still work correctly
+              console.log('pg_restore completed with warnings:', stderrOutput);
+              
+              mainWindow.webContents.send('restoreProgress', {
+                percent: 100,
+                message: 'Restore completed with warnings'
+              });
+              
+              resolve({ 
+                success: true, 
+                output: stdoutOutput,
+                warnings: stderrOutput,
+                warningCount: code
+              });
+            } else {
+              // Actual error
+              const errorMessage = `pg_restore failed with code ${code}. Error details: ${stderrOutput}`;
+              console.error(errorMessage);
+              reject(new Error(errorMessage));
+            }
+          }
+        });
+        
+        pgRestore.on('error', (error) => {
+          const errorMessage = `Failed to execute pg_restore: ${error.message}`;
+          console.error(errorMessage);
+          reject(new Error(errorMessage));
+        });
+      });
+    } catch (error) {
+      console.error(`Error restoring database ${options.database}:`, error);
+      throw error;
+    }
+  });
+} // <-- This closing brace was missing
+
+// ===== App Lifecycle =====
+
+// Create window when Electron has finished initialization
+app.whenReady().then(() => {
+  createWindow();
+  setupIpcHandlers();
+
+  // On macOS, recreate window when dock icon is clicked and no windows are open
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow();
+    }
+  });
+});
+
+// Quit when all windows are closed, except on macOS
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') {
+    app.quit();
   }
 });

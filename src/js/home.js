@@ -1,32 +1,21 @@
 // Wait for DOM to be fully loaded before executing code
 document.addEventListener('DOMContentLoaded', async () => {
-    const themeToggleBtn = document.getElementById('theme-toggle-btn');
-    const body = document.body;
+    // Initialize theme toggle
+    initTheme();
+    
     const logoutBtn = document.getElementById('logout-btn');
     
-    // Check system preference for dark/light mode
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    body.className = prefersDark ? 'dark-mode' : 'light-mode';
-    themeToggleBtn.textContent = prefersDark ? '☀️' : '🌙';
-    
-    // Toggle theme when button is clicked
-    themeToggleBtn.addEventListener('click', () => {
-      const isDarkMode = body.classList.contains('dark-mode');
-      body.className = isDarkMode ? 'light-mode' : 'dark-mode';
-      themeToggleBtn.textContent = isDarkMode ? '🌙' : '☀️';
-      
-      // Notify main process of theme change
-      if (window.api) {
-        window.api.send('setTheme', !isDarkMode);
-      }
-    });
-    
     // Handle logout button click
-    logoutBtn.addEventListener('click', () => {
-      if (window.api) {
-        window.api.send('logout');
-      }
-    });
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', async () => {
+        try {
+          await logout();
+          console.log('Logged out successfully');
+        } catch (error) {
+          console.error('Logout failed:', error);
+        }
+      });
+    }
     
     // Fetch connection info from main process and update UI
     await loadConnectionInfo();
@@ -35,7 +24,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Function to load connection info from main process
   async function loadConnectionInfo() {
     try {
-      const connectionInfo = await window.api.getConnectionInfo();
+      const connectionInfo = await getConnectionInfo();
       console.log('Connection info:', connectionInfo);
       
       if (connectionInfo) {

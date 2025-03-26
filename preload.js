@@ -8,15 +8,22 @@ contextBridge.exposeInMainWorld(
     // Send a message to the main process
     send: (channel, data) => {
       // Only allow certain channels for security reasons
-      const validChannels = ['pgConnect', 'logout', 'setTheme'];
-      if (validChannels.includes(channel)) {
+      const validSendChannels = ['pgConnect', 'logout', 'setTheme'];
+      if (validSendChannels.includes(channel)) {
         ipcRenderer.send(channel, data);
       }
     },
+    
     // Receive a message from the main process
     receive: (channel, func) => {
-      const validChannels = ['pgConnectResponse', 'logoutResponse', 'themeChanged'];
-      if (validChannels.includes(channel)) {
+      const validReceiveChannels = [
+        'pgConnectResponse', 
+        'logoutResponse', 
+        'themeChanged',
+        'restoreProgress'
+      ];
+      
+      if (validReceiveChannels.includes(channel)) {
         // Remove previous listeners to avoid duplicates
         ipcRenderer.removeAllListeners(channel);
         
@@ -24,6 +31,7 @@ contextBridge.exposeInMainWorld(
         ipcRenderer.on(channel, (event, ...args) => func(...args));
       }
     },
+    
     // Get connection info from the main process (async)
     getConnectionInfo: async () => {
       return await ipcRenderer.invoke('getConnectionInfo');
@@ -33,11 +41,28 @@ contextBridge.exposeInMainWorld(
     getDatabases: async () => {
       return await ipcRenderer.invoke('getDatabases');
     },
+    
     getTables: async (dbName) => {
       return await ipcRenderer.invoke('getTables', dbName);
     },
+    
     getColumns: async (dbName, tableName) => {
       return await ipcRenderer.invoke('getColumns', dbName, tableName);
+    },
+    
+    // Create a new database
+    createDatabase: async (options) => {
+      return await ipcRenderer.invoke('createDatabase', options);
+    },
+    
+    // Select backup file using dialog
+    selectBackupFile: async () => {
+      return await ipcRenderer.invoke('selectBackupFile');
+    },
+    
+    // Restore database from backup
+    restoreDatabase: async (options) => {
+      return await ipcRenderer.invoke('restoreDatabase', options);
     }
   }
 );
